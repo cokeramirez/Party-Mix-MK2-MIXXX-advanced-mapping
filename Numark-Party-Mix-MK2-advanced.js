@@ -999,31 +999,27 @@ var NumarkPartyMix = function() {
     };
 
     this.onTrackLoaded = function(value, group, control) {
-        // Solo actuamos cuando el valor es 1 (track cargado)
         if (value === 1) {
             var deckNum = script.deckFromGroup(group);
             var statusByte = (deckNum === 1) ? 0x94 : 0x95;
 
-            // 1. Resetear Efectos 1 y 2 (Apagar y Meta al centro)
+            // 1. Reset de Audio (Inmediato)
             for (var i = 1; i <= 2; i++) {
                 var effectGroup = '[EffectRack1_EffectUnit' + deckNum + '_Effect' + i + ']';
                 engine.setValue(effectGroup, 'enabled', 0);
                 engine.setValue(effectGroup, 'meta', 0.5);
             }
-
-            // 2. Resetear tamaño de Loop a 4 beats
             engine.setValue(group, 'beatloop_size', 4);
 
-            // 3. Forzar el modo visual en el controlador (Prender LED de CUE)
-            // 0x00 es la nota para CUE, 0x7F es encendido
+            // 2. Cambiar Luz de Modo en el Controlador (Inmediato)
             midi.sendShortMsg(statusByte, 0x00, 0x7F);
 
-            // 4. Actualizar lógica interna y refrescar los 4 LEDs de los pads
-            // Llamamos a setPadMode pasando 0x00 en 'control' para que el script
-            // procese el cambio al modo CUE y ejecute el refresco de los hotcues.
-            NumarkPartyMix.setPadMode(null, 0x00, 1, statusByte, group);
-            
-            // Opcional: print("Deck " + deckNum + " reseteado a modo Hotcue.");
+            // 3. Temporizador para el Refresco Visual de Pads
+            // Esperamos 500ms para que Mixxx termine de poblar los Hotcues
+            engine.beginTimer(500, function() {
+                // Forzamos el modo CUE en el script y refrescamos los LEDs
+                NumarkPartyMix.setPadMode(null, 0x00, 1, statusByte, group);
+            }, true); // El true indica que el timer solo corre una vez
         }
     };
 

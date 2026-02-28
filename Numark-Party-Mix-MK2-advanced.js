@@ -563,16 +563,16 @@ var NumarkPartyMix = function() {
 
         // 4. RESET DE EFECTOS (Unidades 1 y 2)
         for (var i = 1; i <= 2; i++) {
-            var unit = '[EffectRack1_EffectUnit' + i + ']';
+            var unitGroup = '[EffectRack1_EffectUnit' + i + ']';
             
-            // ACTIVAR LA UNIDAD MAESTRA (Crucial para el audio)
-            engine.setValue(unit, 'enabled', 1);
+            // ACTIVAR LA UNIDAD MAESTRA
+            engine.setValue(unitGroup, 'enabled', 1);
             
-            // Resetear Efectos 1 y 2 dentro de cada unidad
+            // Resetear Efectos 1 y 2 (Sintaxis corregida: [EffectRack1_EffectUnitN_EffectM])
             for (var f = 1; f <= 2; f++) {
-                var effect = unit + '_Effect' + f;
-                engine.setValue(effect, 'enabled', 0); // Empiezan apagados
-                engine.setValue(effect, 'meta', 0.5);   // Knob al centro
+                var effectGroup = '[EffectRack1_EffectUnit' + i + '_Effect' + f + ']';
+                engine.setValue(effectGroup, 'enabled', 0); 
+                engine.setValue(effectGroup, 'meta', 0.5);
             }
         }
 
@@ -593,6 +593,10 @@ var NumarkPartyMix = function() {
         midi.sendShortMsg(0x9F, 12, 127); // Rojo
         midi.sendShortMsg(0x9F, 13, 127); // Verde
         midi.sendShortMsg(0x9F, 14, 127); // Azul
+
+        engine.connectControl('[Channel1]', 'track_loaded', 'NumarkPartyMix.onTrackLoaded');
+        engine.connectControl('[Channel2]', 'track_loaded', 'NumarkPartyMix.onTrackLoaded');
+
     }; 
 
     var longPressTimers = {};
@@ -941,7 +945,7 @@ var NumarkPartyMix = function() {
         if (hotcuesDownCount[deck] < 0) hotcuesDownCount[deck] = 0;
         engine.setValue(group, "cue_default", value ? 1 : 0);
     };
-
+ 
     // 3. Función Play con Brake (Mejorada para Deck 2)
    this.handlePlayWithBrake = function(channel, control, value, status, group) {
         if (value === 0) return; 
@@ -991,6 +995,27 @@ var NumarkPartyMix = function() {
                 isManualBraking[deck] = true;
                 engine.brake(deck, true, 100);
             }
+        }
+    };
+
+    this.onTrackLoaded = function(value, group, control) {
+        // Solo actuamos cuando el valor es 1 (track cargado)
+        if (value === 1) {
+            var deckNum = script.deckFromGroup(group);
+
+            // 1. Resetear Efectos 1 y 2 de la unidad correspondiente al deck
+            for (var i = 1; i <= 2; i++) {
+                // Construcción correcta del string: [EffectRack1_EffectUnit1_Effect1]
+                var effectGroup = '[EffectRack1_EffectUnit' + deckNum + '_Effect' + i + ']';
+                engine.setValue(effectGroup, 'enabled', 0);
+                engine.setValue(effectGroup, 'meta', 0.5);
+            }
+
+            // 2. Resetear tamaño de Loop a 4 beats
+            engine.setValue(group, 'beatloop_size', 4);
+            
+            // OPCIONAL: Forzar refresco de LEDs de efectos si estuvieras en ese modo
+            // engine.trigger('[EffectRack1_EffectUnit' + deckNum + '_Effect1]', 'enabled');
         }
     };
 

@@ -140,37 +140,10 @@ var NumarkPartyMix = function() {
     var padCallbackMappings = {};
 
     var syncPadLedCallbackHelper = function(group, control, valueByte) {
-        var deckNum = (group.indexOf('Channel2') !== -1 || group.indexOf('Unit2') !== -1) ? 2 : 1;
-        var deckKey = 'DECK' + deckNum;
-        var currentMode = deckPadMode[deckKey];
-
-        iterItems(PAD_MAPPINGS[deckKey], function(padName, modes) {
-            var modeDef = modes[currentMode];
-            if (modeDef && modeDef.bindingControl === control && modeDef.group === group) {
-                var statusByte = (deckNum === 1) ? 0x94 : 0x95;
-                var logicControlByte = PAD_NUM_CONTROL_BYTE[padName];
-                
-                // TRADUCCIÓN: Convertimos nota lógica (0x1C-0x1F) a nota física (0x14-0x17)
-                var physicalControlByte = logicControlByte;
-                if (logicControlByte >= 0x1C) {
-                    physicalControlByte = logicControlByte - 8; // 0x1C -> 0x14, etc.
-                }
-
-                if (currentMode === 'EFFECT') {
-                    var isLayer2 = (logicControlByte >= 0x1C);
-                    if (NumarkPartyMix.isPadModeHeld && !isLayer2) return;
-                    if (!NumarkPartyMix.isPadModeHeld && isLayer2) return;
-                }
-
-                if (valueByte === 0) {
-                    engine.beginTimer(25, function() {
-                        midi.sendShortMsg(statusByte, physicalControlByte, OFF);
-                    }, true);
-                } else {
-                    midi.sendShortMsg(statusByte, physicalControlByte, valueByte);
-                }
-            }
-        });
+        // No importa qué control cambió en Mixxx, simplemente repintamos los dos decks
+        // para asegurar consistencia total.
+        NumarkPartyMix.repaintPads(1);
+        NumarkPartyMix.repaintPads(2);
     };
 
 
@@ -568,11 +541,14 @@ var NumarkPartyMix = function() {
             // ACTIVAR LA UNIDAD MAESTRA
             engine.setValue(unitGroup, 'enabled', 1);
             
-            // Resetear Efectos 1 y 2 (Sintaxis corregida: [EffectRack1_EffectUnitN_EffectM])
-            for (var f = 1; f <= 2; f++) {
-                var effectGroup = '[EffectRack1_EffectUnit' + i + '_Effect' + f + ']';
-                engine.setValue(effectGroup, 'enabled', 0); 
-                engine.setValue(effectGroup, 'meta', 0.5);
+            // RESET DE EFECTOS INICIAL (Sintaxis corregida)
+            for (var i = 1; i <= 2; i++) {
+                engine.setValue('[EffectRack1_EffectUnit' + i + ']', 'enabled', 1);
+                for (var f = 1; f <= 2; f++) {
+                    var effect = '[EffectRack1_EffectUnit' + i + '_Effect' + f + ']';
+                    engine.setValue(effect, 'enabled', 0);
+                    engine.setValue(effect, 'meta', 0.5);
+                }
             }
         }
 
@@ -652,58 +628,37 @@ var NumarkPartyMix = function() {
     };
 	
     this.setPadMode = function(channel, control, value, status, group) {
-        if (value === 0) return; 
+        if (value === 0 && control !== null) return; 
 
-        var deckNum = (status === 0x94 || channel === 4 || group === '[Channel1]') ? 1 : 2;
-        var deckKey = 'DECK' + deckNum;
-        var modeName = (control === null) ? deckPadMode[deckKey] : PAD_MODE_CONTROL_BYTE[control];
+        var deckNum = (status === 0x94 || group === '[Channel1]') ? 1 : 2;
+        var modeName = (control === null) ? deckPadMode['DECK' + deckNum] : PAD_MODE_CONTROL_BYTE[control];
 
         if (modeName) {
-            deckPadMode[deckKey] = modeName;
-            var st = (deckNum === 1) ? 0x94 : 0x95;
+            deckPadMode['DECK' + deckNum] = modeName;
+            // Encender la luz del botón de modo (CUE, LOOP, etc)
+            var modeNote = PAD_MODE_CONTROL_BYTE[modeName];
+            midi.sendShortMsg((deckNum === 1 ? 0x94 : 0x95), modeNote, 0x7F);
+            
+            // Pintar los 4 pads físicos
+            NumarkPartyMix.repaintPads(deckNum);
+        }
+    };
 
-            // 1. Limpieza de los 4 LEDs físicos (0x14 a 0x17)
-            for (var p = 0x14; p <= 0x17; p++) {
-                midi.sendShortMsg(st, p, 0x00);
-            }
+    this.handlePad = function(channel, control, value, status, group) {
+        var deckNum = (status === 0x94 || status === 0x84) ? 1 : 2;
+        var modeName = deckPadMode['DECK' + deckNum];
+        var padNum = PAD_NUM_CONTROL_BYTE[control];
 
-            if (modeName === 'EFFECT') {
-                if (NumarkPartyMix.isPadModeHeld) {
-                    // --- CAPA 2 (Refresco en direcciones físicas) ---
-                    var chGroup = '[Channel' + deckNum + ']';
-                    
-                    // Pad 5 lógico (Quantize) -> LED Pad 1 físico (0x14)
-                    var qu = engine.getValue(chGroup, 'quantize');
-                    midi.sendShortMsg(st, 0x14, qu ? ON : OFF);
-                    
-                    // Pad 6 lógico (Tempo) -> LED Pad 2 físico (0x15)
-                    midi.sendShortMsg(st, 0x15, DIM);
+        var padDefinition = PAD_MAPPINGS['DECK' + deckNum][padNum][modeName];
+        if (padDefinition) {
+            padDefinition.handle(value ? 1 : 0);
+        }
 
-                    // --- NUEVO: Pad 7 (Scratch Toggle) -> LED físico 0x16 ---
-                    var sc = isScratchEnabled[deckNum];
-                    midi.sendShortMsg(st, 0x16, sc ? ON : OFF);
-                    
-                    // Pad 8 lógico (Keylock) -> LED Pad 4 físico (0x17)
-                    var kl = engine.getValue(chGroup, 'keylock');
-                    midi.sendShortMsg(st, 0x17, kl ? ON : OFF);
-                } else {
-                    // --- CAPA 1 (Refresco en direcciones físicas) ---
-                    engine.trigger('[EffectRack1_EffectUnit' + deckNum + '_Effect1]', 'enabled');
-                    engine.trigger('[EffectRack1_EffectUnit' + deckNum + '_Effect2]', 'enabled');
-                    midi.sendShortMsg(st, 0x16, DIM);
-                    midi.sendShortMsg(st, 0x17, DIM);
-                }
-            } else {
-                // Otros modos (Refresco normal en direcciones físicas)
-                iterItems(padCallbackMappings, function(key, mappings) {
-                    forEach(mappings, function(m) {
-                        if (m.deck === deckKey && m.modeName === modeName) {
-                            var parts = key.split(',');
-                            if (parts[0] !== 'SELF') engine.trigger(parts[0], parts[1]);
-                        }
-                    });
-                });
-            }
+        // Al soltar el pad, repintamos para ganarle al "DIM" automático del hardware
+        if (value === 0) {
+            engine.beginTimer(20, function() {
+                NumarkPartyMix.repaintPads(deckNum);
+            }, true);
         }
     };
 
@@ -1001,25 +956,68 @@ var NumarkPartyMix = function() {
     this.onTrackLoaded = function(value, group, control) {
         if (value === 1) {
             var deckNum = script.deckFromGroup(group);
-            var statusByte = (deckNum === 1) ? 0x94 : 0x95;
 
-            // 1. Reset de Audio (Inmediato)
+            // 1. Reset de Audio
             for (var i = 1; i <= 2; i++) {
-                var effectGroup = '[EffectRack1_EffectUnit' + deckNum + '_Effect' + i + ']';
-                engine.setValue(effectGroup, 'enabled', 0);
-                engine.setValue(effectGroup, 'meta', 0.5);
+                var eff = '[EffectRack1_EffectUnit' + deckNum + '_Effect' + i + ']';
+                engine.setValue(eff, 'enabled', 0);
+                engine.setValue(eff, 'meta', 0.5);
             }
             engine.setValue(group, 'beatloop_size', 4);
 
-            // 2. Cambiar Luz de Modo en el Controlador (Inmediato)
-            midi.sendShortMsg(statusByte, 0x00, 0x7F);
+            // 2. Reset de Modo a CUE y pintar LEDs
+            // Esto llamará internamente a repaintPads
+            NumarkPartyMix.setPadMode(null, null, 1, (deckNum === 1 ? 0x94 : 0x95), group);
+        }
+    };
 
-            // 3. Temporizador para el Refresco Visual de Pads
-            // Esperamos 500ms para que Mixxx termine de poblar los Hotcues
-            engine.beginTimer(500, function() {
-                // Forzamos el modo CUE en el script y refrescamos los LEDs
-                NumarkPartyMix.setPadMode(null, 0x00, 1, statusByte, group);
-            }, true); // El true indica que el timer solo corre una vez
+    this.repaintPads = function(deck) {
+        var deckKey = 'DECK' + deck;
+        var mode = deckPadMode[deckKey];
+        var status = (deck === 1) ? 0x94 : 0x95;
+        var group = '[Channel' + deck + ']';
+
+        // Definimos qué valor MIDI enviar a cada uno de los 4 pads físicos (0x14 a 0x17)
+        for (var i = 0; i < 4; i++) {
+            var physicalPad = 0x14 + i;
+            var logicPadNum = i + 1;
+            var midiVal = 0x00; // Por defecto apagado
+
+            if (mode === 'CUE') {
+                // Modo Hotcue: Pad 1-4
+                midiVal = engine.getValue(group, 'hotcue_' + logicPadNum + '_enabled') ? 0x7F : 0x00;
+            } 
+            else if (mode === 'LOOP') {
+                if (logicPadNum === 1) {
+                    midiVal = engine.getValue(group, 'loop_enabled') ? 0x40 : 0x00; // 0x40 es Flash
+                } else {
+                    midiVal = 0x01; // Otros botones de loop en DIM
+                }
+            } 
+            else if (mode === 'SAMPLER') {
+                var sGroup = '[Sampler' + logicPadNum + ']';
+                if (engine.getValue(sGroup, 'play')) midiVal = 0x7F;
+                else if (engine.getValue(sGroup, 'track_loaded')) midiVal = 0x01;
+            } 
+            else if (mode === 'EFFECT') {
+                if (NumarkPartyMix.isPadModeHeld) {
+                    // Capa Shift (Pads 5-8 lógicos)
+                    if (logicPadNum === 1) midiVal = engine.getValue(group, 'quantize') ? 0x7F : 0x00;
+                    if (logicPadNum === 2) midiVal = 0x01; // Tempo range siempre DIM
+                    if (logicPadNum === 3) midiVal = isScratchEnabled[deck] ? 0x7F : 0x00;
+                    if (logicPadNum === 4) midiVal = engine.getValue(group, 'keylock') ? 0x7F : 0x00;
+                } else {
+                    // Capa Normal (Pads 1-4 lógicos)
+                    if (logicPadNum <= 2) {
+                        var eff = '[EffectRack1_EffectUnit' + deck + '_Effect' + logicPadNum + ']';
+                        midiVal = engine.getValue(eff, 'enabled') ? 0x7F : 0x00;
+                    } else {
+                        midiVal = 0x01; // Meta Knobs en DIM
+                    }
+                }
+            }
+            // Enviar el estado absoluto al controlador
+            midi.sendShortMsg(status, physicalPad, midiVal);
         }
     };
 

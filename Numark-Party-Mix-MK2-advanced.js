@@ -102,10 +102,14 @@ var NumarkPartyMix = function() {
     var flashCount = 0;
 
     var flashLoop = function() {
+        // Alterna entre DIM (tenue) y ON (brillante)
         flashVal = (flashVal === DIM) ? ON : DIM;
-        iterItems(flashSet, function(key, controlBytes) {
-            midi.sendShortMsg(controlBytes[0], controlBytes[1], flashVal);
-        });
+        
+        // Si estamos en Mixxx, llamamos al repintado de ambos decks
+        if (typeof NumarkPartyMix !== 'undefined') {
+            NumarkPartyMix.repaintPads(1);
+            NumarkPartyMix.repaintPads(2);
+        }
     };
 
     var makeFlash = function(statusByte, controlByte) {
@@ -537,18 +541,11 @@ var NumarkPartyMix = function() {
         // 4. RESET DE EFECTOS (Unidades 1 y 2)
         for (var i = 1; i <= 2; i++) {
             var unitGroup = '[EffectRack1_EffectUnit' + i + ']';
-            
-            // ACTIVAR LA UNIDAD MAESTRA
             engine.setValue(unitGroup, 'enabled', 1);
-            
-            // RESET DE EFECTOS INICIAL (Sintaxis corregida)
-            for (var i = 1; i <= 2; i++) {
-                engine.setValue('[EffectRack1_EffectUnit' + i + ']', 'enabled', 1);
-                for (var f = 1; f <= 2; f++) {
-                    var effect = '[EffectRack1_EffectUnit' + i + '_Effect' + f + ']';
-                    engine.setValue(effect, 'enabled', 0);
-                    engine.setValue(effect, 'meta', 0.5);
-                }
+            for (var f = 1; f <= 2; f++) {
+                var effectGroup = '[EffectRack1_EffectUnit' + i + '_Effect' + f + ']';
+                engine.setValue(effectGroup, 'enabled', 0);
+                engine.setValue(effectGroup, 'meta', 0.5);
             }
         }
 
@@ -572,6 +569,8 @@ var NumarkPartyMix = function() {
 
         engine.connectControl('[Channel1]', 'track_loaded', 'NumarkPartyMix.onTrackLoaded');
         engine.connectControl('[Channel2]', 'track_loaded', 'NumarkPartyMix.onTrackLoaded');
+
+        flashTimer = engine.beginTimer(200, flashLoop, false);
 
     }; 
 
@@ -666,35 +665,6 @@ var NumarkPartyMix = function() {
 
 
 
-    this.handlePad = function(channel, control, value, status, group) {
-        var deckStr = (status === 0x94 || status === 0x84 || channel === 4) ? 'DECK1' : 'DECK2';
-        var modeName = deckPadMode[deckStr];
-        var padNum = PAD_NUM_CONTROL_BYTE[control];
-
-        if (!deckStr || !modeName || !padNum) return;
-
-        var padDefinition = PAD_MAPPINGS[deckStr][padNum][modeName];
-        if (!padDefinition) return;
-
-        // Ejecutar acción de Mixxx
-        padDefinition.handle(value ? 1 : 0);
-
-        // LÓGICA DE FEEDBACK VISUAL (Note Off)
-        if (value === 0) {
-            // Al soltar el pad, esperamos 25ms para que el comando DIM del hardware pase,
-            // y luego forzamos el estado real que dicta el software.
-            engine.beginTimer(25, function() {
-                if (padDefinition.group && padDefinition.bindingControl) {
-                    // Si el pad está vinculado a Mixxx (FX, Cue, Quantize), pedimos refresco
-                    engine.trigger(padDefinition.group, padDefinition.bindingControl);
-                } else {
-                    // Si es un pad sin estado en Mixxx (Param +/-), lo forzamos a DIM manual
-                    var st = (deckStr === 'DECK1') ? 0x94 : 0x95;
-                    midi.sendShortMsg(st, control, DIM);
-                }
-            }, true);
-        }
-    };
 
     this.scratch = function(channel, control, value, status, group) {
         var deckNum = script.deckFromGroup(group);
@@ -965,8 +935,10 @@ var NumarkPartyMix = function() {
             }
             engine.setValue(group, 'beatloop_size', 4);
 
-            // 2. Reset de Modo a CUE y pintar LEDs
-            // Esto llamará internamente a repaintPads
+            // 2. FORZAR MODO CUE en la variable interna
+            deckPadMode['DECK' + deckNum] = 'CUE'; 
+
+            // 3. Actualizar el controlador y los LEDs
             NumarkPartyMix.setPadMode(null, null, 1, (deckNum === 1 ? 0x94 : 0x95), group);
         }
     };
@@ -989,11 +961,13 @@ var NumarkPartyMix = function() {
             } 
             else if (mode === 'LOOP') {
                 if (logicPadNum === 1) {
-                    midiVal = engine.getValue(group, 'loop_enabled') ? 0x40 : 0x00; // 0x40 es Flash
+                    // Si el loop está habilitado, usa el valor del "latido" (flashVal)
+                    // Si no, apaga el LED (0x00)
+                    midiVal = engine.getValue(group, 'loop_enabled') ? flashVal : 0x00;
                 } else {
                     midiVal = 0x01; // Otros botones de loop en DIM
                 }
-            } 
+            }
             else if (mode === 'SAMPLER') {
                 var sGroup = '[Sampler' + logicPadNum + ']';
                 if (engine.getValue(sGroup, 'play')) midiVal = 0x7F;

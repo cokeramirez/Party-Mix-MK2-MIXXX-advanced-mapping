@@ -845,30 +845,49 @@ var NumarkPartyMix = function() {
     
     this.handleStandardCue = function(channel, control, value, status, group) {
         var deck = (status === 0x91 || status === 0x81) ? 2 : 1;
-        
+        var isPlaying = engine.getValue(group, "play");
+
         if (value > 0) {
             hotcuesDownCount[deck]++;
             
-            // Si hay freno activo, lo matamos para que el salto al CUE sea instantáneo
+            // 1. Si hay freno activo, lo matamos
             if (isManualBraking[deck]) {
                 engine.brake(deck, false);
                 engine.setValue(group, "play", 0);
                 isManualBraking[deck] = false;
             }
 
-            // Si hay un backspin (inercia), lo matamos para saltar al CUE y quedar parados
+            // 2. CASO BACKSPIN (Inercia)
             if (isInertiaMode[deck]) {
-                if (inertiaTimer[deck]) engine.stopTimer(inertiaTimer[deck]);
-                engine.scratchDisable(deck, RAMP_UP); // Detiene el movimiento virtual
-                isInertiaMode[deck] = false;
-                midi.sendShortMsg(0x80 + (deck-1), 0x06, DIM); // Apaga luz de scratch
+                // SOLO saltamos al Cue. NO tocamos la inercia ni el scratch.
+                // El backspin seguirá sonando desde el punto de Cue hasta que 
+                // el plato se detenga físicamente (la lógica de wheelTurn se encargará).
+                engine.setValue(group, "cue_gotoandstop", 1);
+                return; 
+            }
+
+            // 3. Lógica Normal
+            if (isPlaying) {
+                // Si está sonando, saltar y parar
+                engine.setValue(group, "cue_gotoandstop", 1);
+            } 
+            else {
+                // Si está pausado:
+                // Redefinimos solo si tengo la mano en el plato (Scratch On manual)
+                if (isDeckTouched[deck]) {
+                    engine.setValue(group, "cue_set", 1);
+                } 
+                // Si no tengo la mano, comportamiento estándar (pre-escucha)
+                else {
+                    engine.setValue(group, "cue_default", 1);
+                }
             }
         } else {
             hotcuesDownCount[deck]--;
+            engine.setValue(group, "cue_default", 0);
         }
         
         if (hotcuesDownCount[deck] < 0) hotcuesDownCount[deck] = 0;
-        engine.setValue(group, "cue_default", value ? 1 : 0);
     };
  
     // 3. Función Play con Brake (Mejorada para Deck 2)

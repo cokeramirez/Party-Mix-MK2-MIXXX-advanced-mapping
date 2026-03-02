@@ -537,10 +537,7 @@ var NumarkPartyMix = function() {
         // 2. Activar modo software (CC 33, Valor 16)
         midi.sendShortMsg(0xBF, 0x21, 16); 
 
-        // 3. Encender las 3 luces a la vez para probar
-        midi.sendShortMsg(0x9F, 12, 127); // Rojo
-        midi.sendShortMsg(0x9F, 13, 127); // Verde
-        midi.sendShortMsg(0x9F, 14, 127); // Azul
+
 
         engine.connectControl('[Channel1]', 'track_loaded', 'NumarkPartyMix.onTrackLoaded');
         engine.connectControl('[Channel2]', 'track_loaded', 'NumarkPartyMix.onTrackLoaded');

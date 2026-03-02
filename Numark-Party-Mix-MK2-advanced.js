@@ -102,12 +102,16 @@ var NumarkPartyMix = function() {
     var flashCount = 0;
 
     var flashLoop = function() {
-        // Alterna entre DIM (tenue) y ON (brillante)
+        // Alterna el valor del brillo (tenue/brillante)
         flashVal = (flashVal === DIM) ? ON : DIM;
         
-        // Si estamos en Mixxx, llamamos al repintado de ambos decks
-        if (typeof NumarkPartyMix !== 'undefined') {
+        // Optimización Deck 1: Solo repinta si el modo actual es LOOP y hay un loop sonando
+        if (deckPadMode['DECK1'] === 'LOOP' && engine.getValue('[Channel1]', 'loop_enabled')) {
             NumarkPartyMix.repaintPads(1);
+        }
+
+        // Optimización Deck 2: Solo repinta si el modo actual es LOOP y hay un loop sonando
+        if (deckPadMode['DECK2'] === 'LOOP' && engine.getValue('[Channel2]', 'loop_enabled')) {
             NumarkPartyMix.repaintPads(2);
         }
     };

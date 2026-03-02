@@ -547,6 +547,14 @@ var NumarkPartyMix = function() {
 
         flashTimer = engine.beginTimer(200, flashLoop, false);
 
+
+        // Desbloqueo de las luces traseras (SysEx)
+        midi.sendSysexMsg([0xF0, 0x00, 0x20, 0x7F, 0x05, 0xF7], 6);
+
+        // Conectar el pulso del beat de ambos canales a una función simple
+        engine.connectControl('[Channel1]', 'beat_active', 'NumarkPartyMix.onBeatSimple');
+        engine.connectControl('[Channel2]', 'beat_active', 'NumarkPartyMix.onBeatSimple');
+
     }; 
 
     var longPressTimers = {};
@@ -994,6 +1002,15 @@ var NumarkPartyMix = function() {
         }
     };
 
+    this.onBeatSimple = function(value) {
+        // Si value es 1 (golpe), brillo al máximo (127). Si es 0, apagado (0).
+        var brightness = (value > 0) ? 127 : 0;
+        
+        // Canal 16 (0xBF)
+        midi.sendShortMsg(0xBF, 0x40, brightness); // Rojo
+        midi.sendShortMsg(0xBF, 0x41, brightness); // Verde
+        midi.sendShortMsg(0xBF, 0x43, brightness); // Azul
+    };
 };
 
 NumarkPartyMix = new NumarkPartyMix();

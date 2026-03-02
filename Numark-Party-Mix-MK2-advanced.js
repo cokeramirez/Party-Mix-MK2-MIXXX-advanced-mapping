@@ -98,9 +98,6 @@ var NumarkPartyMix = function() {
     var flashTimer = 0;
     var flashVal = DIM;
 
-    var flashSet = {};
-    var flashCount = 0;
-
     var flashLoop = function() {
         // Alterna el valor del brillo (tenue/brillante)
         flashVal = (flashVal === DIM) ? ON : DIM;
@@ -116,32 +113,6 @@ var NumarkPartyMix = function() {
         }
     };
 
-    var makeFlash = function(statusByte, controlByte) {
-        var key = [statusByte, controlByte];
-        if (!(key in flashSet)) {
-            flashSet[key] = key;
-            flashCount += 1;
-
-            if (!flashTimer) {
-                flashTimer = engine.beginTimer(FLASH_DELAY, flashLoop, false);
-            }
-        }
-    };
-
-    var stopFlash = function(statusByte, controlByte) {
-        var key = [statusByte, controlByte];
-        var val = flashSet[key];
-        if (val !== undefined) {
-            delete flashSet[key];
-            flashCount -= 1;
-
-            if (!flashCount && flashTimer) {
-                engine.stopTimer(flashTimer);
-                flashTimer = 0;
-            }
-        }
-    };
-    //end flash timer
 
     var deckPadMode = { 'DECK1': 'CUE', 'DECK2': 'CUE' }; // Forzamos CUE desde el segundo 0
 

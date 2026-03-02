@@ -63,7 +63,7 @@ var NumarkPartyMix = function() {
 
     //variables para backspin sin touch off
     var lastMovementTime = { 1: 0, 2: 0 };
-    var currentVelocity = { 1: 0, 2: 0 };isScratchEnabled
+    var currentVelocity = { 1: 0, 2: 0 };
     var isInertiaMode = { 1: false, 2: false };
     var inertiaTimer = { 1: 0, 2: 0 };
 

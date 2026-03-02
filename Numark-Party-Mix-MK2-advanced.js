@@ -921,6 +921,11 @@ var NumarkPartyMix = function() {
         if (value === 1) {
             var deckNum = script.deckFromGroup(group);
 
+            // Limpieza absoluta de estados al entrar un nuevo track (o clonar)
+            isManualBraking[deckNum] = false; 
+            hotcuesDownCount[deckNum] = 0;
+            isInertiaMode[deckNum] = false;
+
             // 1. Reset de Audio
             for (var i = 1; i <= 2; i++) {
                 var eff = '[EffectRack1_EffectUnit' + deckNum + '_Effect' + i + ']';

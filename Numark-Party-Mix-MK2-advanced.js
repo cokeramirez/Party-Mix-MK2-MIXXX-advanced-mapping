@@ -79,44 +79,159 @@ var NumarkPartyMix = function() {
     // Índice del efecto actual de luces
     var currentLightPattern = 0;
 
+    //LIGHTSHOWS DEFINED HERE
     var LightPatterns = [
         {
-            name: "Simple Beat Sync (Blanco)",
+            name: "Fade",
+            beatCounter: 0,
             onBeat: function(deck, value) {
-                // value es 1 en el golpe y 0 justo después.
-                // El Escudo (setPartyLights) se encargará de no mandar MIDI de más.
-                var b = (value > 0) ? 127 : 0;
-                NumarkPartyMix.setPartyLights(b, b, b);
+                if (value > 0) {
+                    this.beatCounter = (this.beatCounter + 1) % 8;
+                }
             },
-            onTick: function(deck) { /* No hace nada, Mixxx controla el tiempo */ }
+            onTick: function(deck) {
+                var pos = NumarkPartyMix.getBeatPos(deck);
+                
+                var angle = ((this.beatCounter + pos) / 8) * 2 * Math.PI;
+
+                var r = Math.floor((Math.sin(angle) + 1) * 63.5);
+                var g = Math.floor((Math.sin(angle + 2) + 1) * 63.5);
+                var b = Math.floor((Math.sin(angle + 4) + 1) * 63.5);
+
+                NumarkPartyMix.setPartyLights(r, g, b);
+            }
+        }
+        ,{
+            name: "One beam",
+            beatCounter: 0,
+            colorIdx: 0,
+            colorOrder: [0, 1, 2], // 0:R, 1:G, 2:B
+            levels: [0, 0, 0],     // Niveles internos [r, g, b]
+            
+            // Función para desordenar los colores (Shuffle)
+            shuffle: function() {
+                var j, x, i;
+                for (i = this.colorOrder.length - 1; i > 0; i--) {
+                    j = Math.floor(Math.random() * (i + 1));
+                    x = this.colorOrder[i];
+                    this.colorOrder[i] = this.colorOrder[j];
+                    this.colorOrder[j] = x;
+                }
+            },
+
+            onBeat: function(deck, value) {
+                if (value <= 0) return;
+
+                var flashNow = false;
+                // Fase 1: Cada beat (beats 0-15)
+                if (this.beatCounter < 16) {
+                    flashNow = true;
+                } 
+                // Fase 2: Cada 2 beats (beats 16-31)
+                else {
+                    if (this.beatCounter % 2 === 0) flashNow = true;
+                }
+
+                if (flashNow) {
+                    // Elegimos el siguiente color del orden actual
+                    var activeColor = this.colorOrder[this.colorIdx];
+                    this.levels[activeColor] = 127; // Encendido inmediato
+                    
+                    this.colorIdx = (this.colorIdx + 1) % 3;
+                }
+
+                // Al completar el ciclo de 32 beats, barajamos el orden para la próxima
+                this.beatCounter = (this.beatCounter + 1) % 32;
+                if (this.beatCounter === 0) {
+                    this.shuffle();
+                }
+            },
+
+            onTick: function(deck) {
+                // Reducimos el brillo de TODOS los colores simultáneamente
+                // Esto permite que el color anterior se vaya apagando mientras el nuevo brilla
+                for (var i = 0; i < 3; i++) {
+                    this.levels[i] = Math.max(0, this.levels[i] - 6); 
+                }
+
+                NumarkPartyMix.setPartyLights(this.levels[0], this.levels[1], this.levels[2]);
+            }
         },{
-            name: "Flash Blanco (Beat)",
-            onBeat: function(deck) { NumarkPartyMix.setPartyLights(127, 127, 127); },
-            onTick: function(deck) { 
-                // Se apaga gradualmente después del golpe
-                var r = Math.max(0, lastLightValues[0x40] - 15);
-                NumarkPartyMix.setPartyLights(r, r, r);
+            name: "Sparkle strobo",
+            beatCounter: 0,
+            lastSub: -1,
+            lastColorIdx: -1,
+            onBeat: function(deck, value) {
+                if (value > 0) {
+                    // Contamos hasta 32 beats para alternar cada 16
+                    this.beatCounter = (this.beatCounter + 1) % 32;
+                }
+            },
+            onTick: function(deck) {
+                var pos = NumarkPartyMix.getBeatPos(deck);
+                
+                // Decidimos la velocidad: 
+                // Si estamos en los primeros 16 beats -> 4 destellos por beat (1/4)
+                // Si estamos en los siguientes 16 beats -> 2 destellos por beat (1/2)
+                var divisions = (this.beatCounter < 16) ? 4 : 2;
+                
+                var currentSub = Math.floor(pos * divisions);
+
+                if (currentSub !== this.lastSub) {
+                    // DISPARO: Elegir color sin repetir
+                    var nextColorIdx;
+                    do {
+                        nextColorIdx = Math.floor(Math.random() * 3);
+                    } while (nextColorIdx === this.lastColorIdx);
+
+                    this.lastColorIdx = nextColorIdx;
+
+                    var r = 0, g = 0, b = 0;
+                    if (nextColorIdx === 0) r = 127;
+                    else if (nextColorIdx === 1) g = 127;
+                    else b = 127;
+
+                    NumarkPartyMix.setPartyLights(r, g, b);
+                    this.lastSub = currentSub;
+                } else {
+                    // APAGADO: Un frame después (efecto estrobo)
+                    NumarkPartyMix.setPartyLights(0, 0, 0);
+                }
             }
         },
         {
-            name: "Ciclo de Colores (Beat)",
-            colorIdx: 0,
-            onBeat: function(deck) {
-                this.colorIdx = (this.colorIdx + 1) % 3;
-                var colors = [[127,0,0], [0,127,0], [0,0,127]];
-                var c = colors[this.colorIdx];
-                NumarkPartyMix.setPartyLights(c[0], c[1], c[2]);
+            name: "White beat",
+            beatCounter: 0,
+            onBeat: function(deck, value) {
+                if (value > 0) {
+                    // Evaluamos la condición ANTES de incrementar para asegurar sincronía
+                    var flashNow = false;
+
+                    if (this.beatCounter < 16) {
+                        // Frase 1: Flash en todos los beats
+                        flashNow = true;
+                    } else {
+                        // Frase 2: Flash solo en beats pares (16, 18, 20...)
+                        if (this.beatCounter % 2 === 0) flashNow = true;
+                    }
+
+                    if (flashNow) {
+                        // Forzamos el envío MIDI inmediato al máximo
+                        NumarkPartyMix.setPartyLights(127, 127, 127);
+                    }
+
+                    // Incrementamos después de haber procesado el flash
+                    this.beatCounter = (this.beatCounter + 1) % 32;
+                }
             },
-            onTick: function(deck) { /* Solo cambia en el beat */ }
-        },
-        {
-            name: "Respiración Suave (BPM Sync)",
-            onBeat: function(deck) { /* No lo usa */ },
-            onTick: function(deck) {
-                // Calculamos posición del beat (0.0 a 1.0) solo cuando lo necesitamos
-                var pos = NumarkPartyMix.getBeatPos(deck);
-                var intensity = Math.floor((Math.sin(pos * Math.PI) + 1) * 63.5);
-                NumarkPartyMix.setPartyLights(intensity, intensity, intensity);
+            onTick: function(deck) { 
+                // Desvanecimiento suave constante
+                // El caché de lastLightValues evitará mandar ceros innecesarios
+                var current = lastLightValues[0x40];
+                if (current > 0) {
+                    var r = Math.max(0, current - 10);
+                    NumarkPartyMix.setPartyLights(r, r, r);
+                }
             }
         }
     ];
@@ -609,7 +724,9 @@ var NumarkPartyMix = function() {
         // Conexiones de los motores
         engine.connectControl('[Channel1]', 'beat_active', 'NumarkPartyMix.onLightBeat');
         engine.connectControl('[Channel2]', 'beat_active', 'NumarkPartyMix.onLightBeat');
-        engine.beginTimer(30, 'NumarkPartyMix.onLightTick', false); // 33 FPS aprox
+        this.lightTimer = engine.beginTimer(30, function() { 
+            NumarkPartyMix.onLightTick(); 
+        });
 
     }; 
 
@@ -860,6 +977,8 @@ var NumarkPartyMix = function() {
         forEach([0x80, 0x81], function(deck) {
             midi.sendShortMsg(deck, PFL_CONTROL, OFF);
         });
+
+        this.killLights();
     };
     
     this.handleGlobalShift = function(channel, control, value, status, group) {
@@ -1042,7 +1161,8 @@ var NumarkPartyMix = function() {
                     if (logicPadNum === 1) midiVal = engine.getValue(group, 'quantize') ? 0x7F : 0x00;
                     if (logicPadNum === 2) midiVal = 0x01; // Tempo range siempre DIM
                     if (logicPadNum === 3) midiVal = isScratchEnabled[deck] ? 0x7F : 0x00;
-                    if (logicPadNum === 4) midiVal = engine.getValue(group, 'keylock') ? 0x7F : 0x00;
+                    //if (logicPadNum === 4) midiVal = engine.getValue(group, 'keylock') ? 0x7F : 0x00;
+                    if (logicPadNum === 4) midiVal = 0x01; //always dim
                 } else {
                     // Capa Normal (Pads 1-4 lógicos)
                     if (logicPadNum <= 2) {
@@ -1079,19 +1199,26 @@ var NumarkPartyMix = function() {
 
     this.getBeatPos = function(deck) {
         var group = '[Channel' + deck + ']';
-        var bpm = engine.getValue(group, 'visual_bpm');
-        if (bpm <= 0) return 0;
+        var pos = engine.getValue(group, 'beat_distance');
         
-        // Cálculo basado en la posición de reproducción y el tiempo
-        var beatDuration = 60 / bpm;
-        var playPos = engine.getValue(group, 'playposition') * engine.getValue(group, 'track_samples') / (engine.getValue(group, 'track_samplerate') * 2);
-        return (playPos % beatDuration) / beatDuration;
+        // Si la canción está pausada, beat_distance no se mueve. 
+        // Para probar efectos, asegúrate de que la canción esté en PLAY.
+        return (pos !== undefined && pos !== null) ? pos : 0;
     };
 
     this.onLightTick = function() {
-        var masterDeck = engine.getValue('[Master]', 'peak_indicator_left') > engine.getValue('[Master]', 'peak_indicator_right') ? 1 : 2; // O usa tu lógica de deck activo
+        // Detectar deck activo (el que tiene el fader arriba y está en play)
+        var masterDeck = 1;
+        if (engine.getValue('[Channel2]', 'play') && engine.getValue('[Channel2]', 'volume') > 0.1) {
+            masterDeck = 2;
+        } else if (engine.getValue('[Channel1]', 'play')) {
+            masterDeck = 1;
+        }
+
         var effect = LightPatterns[currentLightPattern];
-        if (effect && effect.onTick) effect.onTick(masterDeck);
+        if (effect && effect.onTick) {
+            effect.onTick(masterDeck);
+        }
     };
 
     this.onLightBeat = function(value, group, control) {

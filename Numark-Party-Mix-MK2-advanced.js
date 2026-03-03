@@ -73,6 +73,54 @@ var NumarkPartyMix = function() {
     var BACKSPIN_THRESHOLD = 40; // Velocidad mínima para activar el modo inercia, default 15
     var STOP_THRESHOLD = 50;    // Milisegundos sin movimiento para considerar que el plato paró
 
+    // Memoria de luces (Caché) para evitar spam MIDI
+    var lastLightValues = { 0x40: -1, 0x41: -1, 0x43: -1 }; 
+
+    // Índice del efecto actual de luces
+    var currentLightPattern = 0;
+
+    var LightPatterns = [
+        {
+            name: "Simple Beat Sync (Blanco)",
+            onBeat: function(deck, value) {
+                // value es 1 en el golpe y 0 justo después.
+                // El Escudo (setPartyLights) se encargará de no mandar MIDI de más.
+                var b = (value > 0) ? 127 : 0;
+                NumarkPartyMix.setPartyLights(b, b, b);
+            },
+            onTick: function(deck) { /* No hace nada, Mixxx controla el tiempo */ }
+        },{
+            name: "Flash Blanco (Beat)",
+            onBeat: function(deck) { NumarkPartyMix.setPartyLights(127, 127, 127); },
+            onTick: function(deck) { 
+                // Se apaga gradualmente después del golpe
+                var r = Math.max(0, lastLightValues[0x40] - 15);
+                NumarkPartyMix.setPartyLights(r, r, r);
+            }
+        },
+        {
+            name: "Ciclo de Colores (Beat)",
+            colorIdx: 0,
+            onBeat: function(deck) {
+                this.colorIdx = (this.colorIdx + 1) % 3;
+                var colors = [[127,0,0], [0,127,0], [0,0,127]];
+                var c = colors[this.colorIdx];
+                NumarkPartyMix.setPartyLights(c[0], c[1], c[2]);
+            },
+            onTick: function(deck) { /* Solo cambia en el beat */ }
+        },
+        {
+            name: "Respiración Suave (BPM Sync)",
+            onBeat: function(deck) { /* No lo usa */ },
+            onTick: function(deck) {
+                // Calculamos posición del beat (0.0 a 1.0) solo cuando lo necesitamos
+                var pos = NumarkPartyMix.getBeatPos(deck);
+                var intensity = Math.floor((Math.sin(pos * Math.PI) + 1) * 63.5);
+                NumarkPartyMix.setPartyLights(intensity, intensity, intensity);
+            }
+        }
+    ];
+
 
     var MIDI_CH_TO_DECK = {
         0: 'DECK1',
@@ -401,6 +449,15 @@ var NumarkPartyMix = function() {
         this.getCallbackKeyMappings = function() { return {}; };
     };
 
+    var padDefLightCycle = function() {
+        this.handle = function(isPressed) {
+            if (!isPressed) return;
+            NumarkPartyMix.killLights(); // Limpieza previa
+            currentLightPattern = (currentLightPattern + 1) % LightPatterns.length;
+        };
+        this.getCallbackKeyMappings = function() { return {}; };
+    };
+
 
 
 
@@ -419,7 +476,7 @@ var NumarkPartyMix = function() {
             PAD5: { CUE: new padDefCueClear(1, 1), LOOP: new padDefBeatjump(1, -1), SAMPLER: new padDefSimpleSampler(5), EFFECT: new padDefConfigToggle('[Channel1]', 'quantize') },
             PAD6: { CUE: new padDefCueClear(1, 2), LOOP: new padDefBeatjump(1, 1),  SAMPLER: new padDefSimpleSampler(6), EFFECT: new padDefTempoRange(1) },
             PAD7: { CUE: new padDefCueClear(1, 3), LOOP: new padDefBeatjump(1, -4), SAMPLER: new padDefSimpleSampler(7), EFFECT: new padDefScratchToggle(1) }, 
-            PAD8: { CUE: new padDefCueClear(1, 4), LOOP: new padDefBeatjump(1, 4),  SAMPLER: new padDefSamplerPanic(),   EFFECT: new padDefConfigToggle('[Channel1]', 'keylock') }
+            PAD8: { CUE: new padDefCueClear(1, 4), LOOP: new padDefBeatjump(1, 4),  SAMPLER: new padDefSamplerPanic(),   EFFECT: new padDefLightCycle() }
         },
         DECK2: {
             // Capa Principal (Pads 1-4)
@@ -431,7 +488,7 @@ var NumarkPartyMix = function() {
             PAD5: { CUE: new padDefCueClear(2, 1), LOOP: new padDefBeatjump(2, -1), SAMPLER: new padDefSimpleSampler(5), EFFECT: new padDefConfigToggle('[Channel2]', 'quantize') },
             PAD6: { CUE: new padDefCueClear(2, 2), LOOP: new padDefBeatjump(2, 1),  SAMPLER: new padDefSimpleSampler(6), EFFECT: new padDefTempoRange(2) },
             PAD7: { CUE: new padDefCueClear(2, 3), LOOP: new padDefBeatjump(2, -4), SAMPLER: new padDefSimpleSampler(7), EFFECT: new padDefScratchToggle(2) }, 
-            PAD8: { CUE: new padDefCueClear(2, 4), LOOP: new padDefBeatjump(2, 4),  SAMPLER: new padDefSamplerPanic(),   EFFECT: new padDefConfigToggle('[Channel2]', 'keylock') }
+            PAD8: { CUE: new padDefCueClear(2, 4), LOOP: new padDefBeatjump(2, 4),  SAMPLER: new padDefSamplerPanic(),   EFFECT: new padDefLightCycle() }
         }
     };
     // End pad mappings
@@ -548,9 +605,11 @@ var NumarkPartyMix = function() {
         // Desbloqueo de las luces traseras (SysEx)
         midi.sendSysexMsg([0xF0, 0x00, 0x20, 0x7F, 0x05, 0xF7], 6);
 
-        // Conectar el pulso del beat de ambos canales a una función simple
-        engine.connectControl('[Channel1]', 'beat_active', 'NumarkPartyMix.onBeatSimple');
-        engine.connectControl('[Channel2]', 'beat_active', 'NumarkPartyMix.onBeatSimple');
+        
+        // Conexiones de los motores
+        engine.connectControl('[Channel1]', 'beat_active', 'NumarkPartyMix.onLightBeat');
+        engine.connectControl('[Channel2]', 'beat_active', 'NumarkPartyMix.onLightBeat');
+        engine.beginTimer(30, 'NumarkPartyMix.onLightTick', false); // 33 FPS aprox
 
     }; 
 
@@ -999,15 +1058,54 @@ var NumarkPartyMix = function() {
         }
     };
 
-    this.onBeatSimple = function(value) {
-        // Si value es 1 (golpe), brillo al máximo (127). Si es 0, apagado (0).
-        var brightness = (value > 0) ? 127 : 0;
-        
-        // Canal 16 (0xBF)
-        midi.sendShortMsg(0xBF, 0x40, brightness); // Rojo
-        midi.sendShortMsg(0xBF, 0x41, brightness); // Verde
-        midi.sendShortMsg(0xBF, 0x43, brightness); // Azul
+
+    this.setPartyLights = function(r, g, b) {
+        var status = 0xBF; // Canal 16
+        var mapping = { 0x40: r, 0x41: g, 0x43: b };
+
+        for (var cc in mapping) {
+            var val = Math.floor(Math.min(127, Math.max(0, mapping[cc])));
+            if (lastLightValues[cc] !== val) {
+                midi.sendShortMsg(status, parseInt(cc), val);
+                lastLightValues[cc] = val;
+            }
+        }
     };
+
+    // Función para apagar todo y resetear caché
+    this.killLights = function() {
+        this.setPartyLights(0, 0, 0);
+    };
+
+    this.getBeatPos = function(deck) {
+        var group = '[Channel' + deck + ']';
+        var bpm = engine.getValue(group, 'visual_bpm');
+        if (bpm <= 0) return 0;
+        
+        // Cálculo basado en la posición de reproducción y el tiempo
+        var beatDuration = 60 / bpm;
+        var playPos = engine.getValue(group, 'playposition') * engine.getValue(group, 'track_samples') / (engine.getValue(group, 'track_samplerate') * 2);
+        return (playPos % beatDuration) / beatDuration;
+    };
+
+    this.onLightTick = function() {
+        var masterDeck = engine.getValue('[Master]', 'peak_indicator_left') > engine.getValue('[Master]', 'peak_indicator_right') ? 1 : 2; // O usa tu lógica de deck activo
+        var effect = LightPatterns[currentLightPattern];
+        if (effect && effect.onTick) effect.onTick(masterDeck);
+    };
+
+    this.onLightBeat = function(value, group, control) {
+    // Detectamos el deck desde el grupo ([Channel1] o [Channel2])
+    var deck = script.deckFromGroup(group); 
+    
+    // Buscamos el efecto actual
+    var effect = LightPatterns[currentLightPattern];
+    
+    // Si el efecto tiene la función onBeat, se la ejecutamos pasándole el valor (1 o 0)
+    if (effect && effect.onBeat) {
+        effect.onBeat(deck, value);
+    }
+};
 };
 
 NumarkPartyMix = new NumarkPartyMix();

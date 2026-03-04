@@ -64,14 +64,15 @@ var NumarkPartyMix = function() {
     //variables para backspin sin touch off
     var lastMovementTime = { 1: 0, 2: 0 };
     var currentVelocity = { 1: 0, 2: 0 };
+    var lastDirection = { 1: 0, 2: 0 }; // para no hacer inercia hacia adelante
     var isInertiaMode = { 1: false, 2: false };
     var inertiaTimer = { 1: 0, 2: 0 };
 
     var isDeckTouched = { 1: false, 2: false }; // Nueva variable para saber si la mano está en el plato
 
 
-    var BACKSPIN_THRESHOLD = 40; // Velocidad mínima para activar el modo inercia, default 15
-    var STOP_THRESHOLD = 50;    // Milisegundos sin movimiento para considerar que el plato paró
+    var BACKSPIN_THRESHOLD = 10; // Velocidad mínima para activar el modo inercia, default 15
+    var STOP_THRESHOLD = 4;    // Milisegundos sin movimiento para considerar que el plato paró
 
     // Memoria de luces (Caché) para evitar spam MIDI
     var lastLightValues = { 0x40: -1, 0x41: -1, 0x43: -1 }; 
@@ -866,7 +867,8 @@ var NumarkPartyMix = function() {
         var onReleaseCallback = function() {
             isDeckTouched[deckNum] = false; // <--- LA MANO SE HA QUITADO
 
-            if (currentVelocity[deckNum] > BACKSPIN_THRESHOLD) {
+            if (currentVelocity[deckNum] > BACKSPIN_THRESHOLD && lastDirection[deckNum] < 0) {    // Solo entra en inercia si la velocidad supera el umbral Y la dirección era hacia ATRÁS
+
                 isInertiaMode[deckNum] = true;
                 if (inertiaTimer[deckNum]) engine.stopTimer(inertiaTimer[deckNum]);
                 inertiaTimer[deckNum] = engine.beginTimer(STOP_THRESHOLD, function() {
@@ -883,6 +885,9 @@ var NumarkPartyMix = function() {
     this.wheelTurn = function(channel, control, value, status, group) {
         var deckNum = script.deckFromGroup(group);
         var newValue = (value < 64) ? value : value - 128;
+
+        lastDirection[deckNum] = newValue; // <--- CAPTURAMOS EL SENTIDO (Positivo = Forward, Negativo = Backspin)
+
         
         // --- CALCULO DE VELOCIDAD ---
         var now = Date.now();

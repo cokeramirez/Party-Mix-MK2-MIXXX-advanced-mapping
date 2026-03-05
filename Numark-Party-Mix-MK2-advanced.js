@@ -35,7 +35,7 @@ var NumarkPartyMix = function() {
     var USE_FLASH = false;
     var USE_SAMPLE_BANK = true;
 
-    var RESOLUTION = 300;
+    var RESOLUTION = 310; //300
     var RECORD_SPEED = 33 + (1 / 3);
     var ALPHA = 1.0 / 8;
     var BETA = ALPHA / 32;
@@ -70,9 +70,15 @@ var NumarkPartyMix = function() {
 
     var isDeckTouched = { 1: false, 2: false }; // Nueva variable para saber si la mano está en el plato
 
+    // Historial para suavizar el jitter del USB (Ventana de 8 mensajes)
+    var deltaHistory = { 
+        1: [6, 6, 6, 6, 6, 6, 6, 6], 
+        2: [6, 6, 6, 6, 6, 6, 6, 6] 
+    };
 
-    var BACKSPIN_THRESHOLD = 10; // Velocidad mínima para activar el modo inercia, default 15
-    var STOP_THRESHOLD = 4;    // Milisegundos sin movimiento para considerar que el plato paró
+
+    var BACKSPIN_THRESHOLD = 0; // Velocidad mínima para activar el modo inercia, default 15
+    var STOP_THRESHOLD = 100;    // Milisegundos sin movimiento para considerar que el plato paró
 
     // Memoria de luces (Caché) para evitar spam MIDI
     var lastLightValues = { 0x40: -1, 0x41: -1, 0x43: -1 }; 
@@ -840,42 +846,55 @@ var NumarkPartyMix = function() {
 
         var onDownCallback = function() {
             isDeckTouched[deckNum] = true; 
+            
+            if (inertiaTimer[deckNum]) {
+                engine.stopTimer(inertiaTimer[deckNum]);
+                inertiaTimer[deckNum] = 0;
+            }
+            isInertiaMode[deckNum] = false; 
 
-            // Si tocamos el plato mientras el freno está actuando
+            // RESET INTELIGENTE: Llenamos el historial con el delta que 
+            // correspondería a la velocidad actual de la canción
+            var currentRate = Math.abs(engine.getValue(group, "rate_ratio"));
+            var idealDelta = (currentRate > 0) ? (6 / currentRate) : 6;
+            deltaHistory[deckNum] = [idealDelta, idealDelta, idealDelta, idealDelta, idealDelta, idealDelta, idealDelta, idealDelta];
+
             if (isManualBraking[deckNum]) {
-                engine.brake(deckNum, false);      // 1. Matamos el efecto de freno
-                engine.setValue(group, "play", 0); // 2. Forzamos la PAUSA lógica en Mixxx
-                isManualBraking[deckNum] = false;  // 3. Limpiamos nuestra variable
+                engine.brake(deckNum, false);
+                engine.setValue(group, "play", 0);
+                isManualBraking[deckNum] = false;
             }
 
-            // Ahora activamos el scratch (esto es lo que "amarrará" el track a tu mano)
-            if (isInertiaMode[deckNum]) {
-                if (inertiaTimer[deckNum]) {
-                    engine.stopTimer(inertiaTimer[deckNum]);
-                    inertiaTimer[deckNum] = 0;
-                }
-                isInertiaMode[deckNum] = false;
-                // No llamamos a scratchEnable aquí porque ya venía de inercia (ya estaba activo)
-            } else {
-                if (!engine.isScratching(deckNum)) {
-                    engine.scratchEnable(deckNum, RESOLUTION, RECORD_SPEED, ALPHA, BETA, RAMP_DOWN);
-                    midi.sendShortMsg(status, control, ON);
-                }
+            if (!engine.isScratching(deckNum)) {
+                engine.scratchEnable(deckNum, RESOLUTION, RECORD_SPEED, ALPHA, BETA, RAMP_DOWN);
+                midi.sendShortMsg(status, control, ON);
             }
         };
 
         var onReleaseCallback = function() {
-            isDeckTouched[deckNum] = false; // <--- LA MANO SE HA QUITADO
+            isDeckTouched[deckNum] = false; 
 
-            if (currentVelocity[deckNum] > BACKSPIN_THRESHOLD && lastDirection[deckNum] < 0) {    // Solo entra en inercia si la velocidad supera el umbral Y la dirección era hacia ATRÁS
-
+            // Al ser BACKSPIN_THRESHOLD = 0, esto siempre entrará si el plato se está moviendo
+            if (currentVelocity[deckNum] > BACKSPIN_THRESHOLD) {
                 isInertiaMode[deckNum] = true;
+                
                 if (inertiaTimer[deckNum]) engine.stopTimer(inertiaTimer[deckNum]);
+                
+                // Timer de seguridad: si el plato no manda más ticks (se detuvo físicamente), matamos el scratch
                 inertiaTimer[deckNum] = engine.beginTimer(STOP_THRESHOLD, function() {
-                    stopScratching();
+                    if (engine.isScratching(deckNum)) {
+                        engine.scratchDisable(deckNum, RAMP_UP);
+                        midi.sendShortMsg(status, control, DIM);
+                    }
+                    isInertiaMode[deckNum] = false;
                 }, true);
             } else {
-                stopScratching();
+                // Si se soltó estando totalmente quieto
+                if (engine.isScratching(deckNum)) {
+                    engine.scratchDisable(deckNum, RAMP_UP);
+                    midi.sendShortMsg(status, control, DIM);
+                    isInertiaMode[deckNum] = false;
+                }
             }
         };
 
@@ -885,40 +904,60 @@ var NumarkPartyMix = function() {
     this.wheelTurn = function(channel, control, value, status, group) {
         var deckNum = script.deckFromGroup(group);
         var newValue = (value < 64) ? value : value - 128;
-
-        lastDirection[deckNum] = newValue; // <--- CAPTURAMOS EL SENTIDO (Positivo = Forward, Negativo = Backspin)
-
         
-        // --- CALCULO DE VELOCIDAD ---
         var now = Date.now();
         var deltaTime = now - lastMovementTime[deckNum];
-        if (deltaTime > 0) {
-            // Velocidad: pasos por milisegundo (usamos valor absoluto)
-            currentVelocity[deckNum] = Math.abs(newValue) / deltaTime * 100; 
-        }
         lastMovementTime[deckNum] = now;
-        // ----------------------------
+
+        if (deltaTime > 0) {
+            deltaHistory[deckNum].shift();
+            deltaHistory[deckNum].push(deltaTime);
+
+            var sumDeltas = 0;
+            for (var i = 0; i < deltaHistory[deckNum].length; i++) {
+                sumDeltas += deltaHistory[deckNum][i];
+            }
+            // Velocidad estable promediada en 8 mensajes
+            currentVelocity[deckNum] = (100 * deltaHistory[deckNum].length) / sumDeltas;
+        }
 
         if (engine.isScratching(deckNum)) {
-            engine.scratchTick(deckNum, newValue);
+            var isPlaying = engine.getValue(group, "play");
             
-            // Si estamos en modo inercia, cada movimiento refresca el temporizador de seguridad
-            if (isInertiaMode[deckNum]) {
-                if (inertiaTimer[deckNum]) {
-                    engine.stopTimer(inertiaTimer[deckNum]);
+            if (isInertiaMode[deckNum] && isPlaying && newValue > 0) {
+                // --- LA FUENTE DE LA VERDAD ---
+                // rate_ratio nos da la velocidad real de salida (0.5 para -50%, 1.5 para +50%)
+                // No importa si es por el fader, por Sync o por Master Clock.
+                var targetRate = Math.abs(engine.getValue(group, "rate_ratio")); 
+
+                // Calculamos la velocidad de sincronía física exacta para esa velocidad de audio
+                var syncVelocity = ((RESOLUTION * RECORD_SPEED) / 600) * targetRate;
+
+                // Aplicamos el Handoff
+                if (currentVelocity[deckNum] <= syncVelocity) {
+                    engine.scratchDisable(deckNum, RAMP_UP);
+                    // No matamos la inercia aún para mantener el "escudo" contra el Jog residual
                 }
-                inertiaTimer[deckNum] = engine.beginTimer(STOP_THRESHOLD, function() {
-                    // Si el plato deja de mandar señales de giro por X tiempo, cerramos el scratch
-                    if (engine.isScratching(deckNum)) {
-                        engine.scratchDisable(deckNum, RAMP_UP);
-                        // Buscamos el control de scratch para atenuar el LED (0x06)
-                        midi.sendShortMsg(0x80 + (deckNum-1), 0x06, DIM); 
-                    }
-                    isInertiaMode[deckNum] = false;
-                }, true);
+            }
+
+            if (engine.isScratching(deckNum)) {
+                engine.scratchTick(deckNum, newValue);
             }
         } else {
-            engine.setValue(group, 'jog', newValue);
+            if (!isInertiaMode[deckNum]) {
+                engine.setValue(group, 'jog', newValue);
+            }
+        }
+
+        if (isInertiaMode[deckNum]) {
+            if (inertiaTimer[deckNum]) engine.stopTimer(inertiaTimer[deckNum]);
+            inertiaTimer[deckNum] = engine.beginTimer(STOP_THRESHOLD, function() {
+                if (engine.isScratching(deckNum)) {
+                    engine.scratchDisable(deckNum, RAMP_UP);
+                }
+                isInertiaMode[deckNum] = false; 
+                midi.sendShortMsg(0x80 + (deckNum - 1), 0x06, 0x01); 
+            }, true);
         }
     };
 

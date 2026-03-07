@@ -54,8 +54,10 @@ var NumarkPartyMix = function() {
     var lastMovementTime = { 1: 0, 2: 0 };
 
     // --- VARIABLES DE CONFIGURACIÓN ---
-    var INERTIA_TIMEOUT_MS = 15; // El tiempo que esperaremos entre paquetes (tu variable X)
+    var INERTIA_TIMEOUT_MS = 20; // El tiempo que esperaremos entre paquetes (tu variable X)
     var POST_SCRATCH_LOCKOUT_MS = 250; // Y ms: El "Escudo" que ignora la cola de mensajes (Nudge/Jog)
+    var PAUSE_JOG_SENSITIVITY = 0.1;    // SENSIBILIDAD EN PAUSA (0.1 = 10% de la velocidad normal)
+
 
     var isDeckTouched = { 1: false, 2: false };
     var scratchStopTimer = { 1: 0, 2: 0 };
@@ -817,7 +819,7 @@ var NumarkPartyMix = function() {
     this.exitScratchMode = function(deckNum) {
         if (engine.isScratching(deckNum)) {
             engine.scratchDisable(deckNum, RAMP_UP);
-            lastScratchExitTime[deckNum] = Date.now(); // Activamos el escudo
+            lastScratchExitTime[deckNum] = Date.now(); 
         }
         if (scratchStopTimer[deckNum]) {
             engine.stopTimer(scratchStopTimer[deckNum]);
@@ -833,28 +835,21 @@ var NumarkPartyMix = function() {
         if (!isScratchEnabled[deckNum]) return;
 
         if (value > 0) {
-            // --- TOUCH ON ---
             isDeckTouched[deckNum] = true;
-            
             if (scratchStopTimer[deckNum]) {
                 engine.stopTimer(scratchStopTimer[deckNum]);
                 scratchStopTimer[deckNum] = 0;
             }
-
             if (isManualBraking[deckNum]) {
                 engine.brake(deckNum, false);
                 engine.setValue(group, "play", 0);
                 isManualBraking[deckNum] = false;
             }
-
             if (!engine.isScratching(deckNum)) {
                 engine.scratchEnable(deckNum, RESOLUTION, RECORD_SPEED, ALPHA, BETA, RAMP_DOWN);
             }
         } else {
-            // --- TOUCH OFF ---
             isDeckTouched[deckNum] = false;
-
-            // Timer de seguridad: si no hay movimiento en los próximos 20ms, matamos el scratch
             if (scratchStopTimer[deckNum]) engine.stopTimer(scratchStopTimer[deckNum]);
             scratchStopTimer[deckNum] = engine.beginTimer(INERTIA_TIMEOUT_MS + 5, function() {
                 if (!isDeckTouched[deckNum]) {
@@ -874,16 +869,11 @@ var NumarkPartyMix = function() {
         lastMovementTime[deckNum] = now;
 
         if (engine.isScratching(deckNum)) {
-            // Lógica de Inercia / Backspin
             if (!isDeckTouched[deckNum]) {
-                
-                // Si el plato va muy lento (delta > X), cerramos el modo scratch
                 if (delta > INERTIA_TIMEOUT_MS) {
                     NumarkPartyMix.exitScratchMode(deckNum);
                     return; 
                 }
-
-                // Si va a buena velocidad, refrescamos el watchdog
                 if (scratchStopTimer[deckNum]) engine.stopTimer(scratchStopTimer[deckNum]);
                 scratchStopTimer[deckNum] = engine.beginTimer(INERTIA_TIMEOUT_MS + 10, function() {
                     if (!isDeckTouched[deckNum]) {
@@ -891,23 +881,26 @@ var NumarkPartyMix = function() {
                     }
                 }, true);
             }
-
-            // Aplicamos el movimiento al motor de scratch de Mixxx
             engine.scratchTick(deckNum, newValue);
             
         } else {
-            // --- MODO JOG (PITCH BEND) ---
-            
-            // ESCUDO: Si el tiempo actual está dentro del bloqueo post-scratch,
-            // ignoramos el mensaje para que la "cola" de 211ms no mueva la canción.
+            // --- MODO JOG (PITCH BEND / SEEK) ---
             if (now - lastScratchExitTime[deckNum] < POST_SCRATCH_LOCKOUT_MS) {
                 return;
             }
 
-            // Si pasó el escudo, el movimiento es un Nudge/Pitch Bend normal
-            engine.setValue(group, 'jog', newValue);
+            var isPlaying = engine.getValue(group, "play");
+            
+            if (!isPlaying) {
+                // SI ESTÁ EN PAUSA: Aplicamos sensibilidad de precisión (tipo Serato)
+                engine.setValue(group, 'jog', newValue * PAUSE_JOG_SENSITIVITY);
+            } else {
+                // SI ESTÁ SONANDO: Pitch bend normal (1:1)
+                engine.setValue(group, 'jog', newValue);
+            }
         }
     };
+
 
 
 

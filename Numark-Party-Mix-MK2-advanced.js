@@ -37,7 +37,7 @@ var NumarkPartyMix = function() {
 
     var RESOLUTION = 310; //300
     var RECORD_SPEED = 33 + (1 / 3);
-    var ALPHA = 1.0 / 8;
+    var ALPHA = 1.0 / 8; //original 1.0 / 8
     var BETA = ALPHA / 32;
     var RAMP_DOWN = true;
     var RAMP_UP = false;
@@ -77,8 +77,8 @@ var NumarkPartyMix = function() {
     };
 
 
-    var BACKSPIN_THRESHOLD = 0; // Velocidad mínima para activar el modo inercia, default 15
-    var STOP_THRESHOLD = 100;    // Milisegundos sin movimiento para considerar que el plato paró
+    var BACKSPIN_THRESHOLD = 5; // Velocidad mínima para activar el modo inercia, default 15
+    var STOP_THRESHOLD = 50;    // Milisegundos sin movimiento para considerar que el plato paró
 
     // Memoria de luces (Caché) para evitar spam MIDI
     var lastLightValues = { 0x40: -1, 0x41: -1, 0x43: -1 }; 

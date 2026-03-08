@@ -836,6 +836,7 @@ var NumarkPartyMix = function() {
         if (!isScratchEnabled[deckNum]) return;
 
         if (value > 0) {
+            // --- TOUCH ON ---
             isDeckTouched[deckNum] = true;
             if (scratchStopTimer[deckNum]) {
                 engine.stopTimer(scratchStopTimer[deckNum]);
@@ -850,14 +851,13 @@ var NumarkPartyMix = function() {
                 engine.scratchEnable(deckNum, RESOLUTION, RECORD_SPEED, ALPHA, BETA, RAMP_DOWN);
             }
         } else {
+            // --- TOUCH OFF ---
             isDeckTouched[deckNum] = false;
 
-            // --- LÓGICA ADAPTATIVA AL SOLTAR ---
-            var isPlaying = engine.getValue(group, "play");
-            var currentTimeout = isPlaying ? INERTIA_TIMEOUT_MS : INERTIA_TIMEOUT_MS_PAUSE;
-
+            // Por defecto, al soltar usamos el timeout corto (10ms)
+            // Si el plato realmente está girando atrás, wheelTurn cambiará esto a 100ms en el acto.
             if (scratchStopTimer[deckNum]) engine.stopTimer(scratchStopTimer[deckNum]);
-            scratchStopTimer[deckNum] = engine.beginTimer(currentTimeout + 5, function() {
+            scratchStopTimer[deckNum] = engine.beginTimer(INERTIA_TIMEOUT_MS + 5, function() {
                 if (!isDeckTouched[deckNum]) NumarkPartyMix.exitScratchMode(deckNum);
             }, true);
         }
@@ -866,43 +866,49 @@ var NumarkPartyMix = function() {
 
 
 
+
     // --- FUNCIÓN WHEEL TURN (Movimiento del Jog) ---
     this.wheelTurn = function(channel, control, value, status, group) {
         var deckNum = script.deckFromGroup(group);
-        var newValue = (value < 64) ? value : value - 128;
+        var newValue = (value < 64) ? value : value - 128; // 1 = adelante, -1 = atrás
         var now = Date.now();
         var delta = now - lastMovementTime[deckNum];
         lastMovementTime[deckNum] = now;
 
         if (engine.isScratching(deckNum)) {
+            // Si el plato gira libre (sin mano)
             if (!isDeckTouched[deckNum]) {
-                
-                // --- LÓGICA ADAPTATIVA DURANTE EL MOVIMIENTO ---
                 var isPlaying = engine.getValue(group, "play");
-                var currentTimeout = isPlaying ? INERTIA_TIMEOUT_MS : INERTIA_TIMEOUT_MS_PAUSE;
+                
+                // --- DECISIÓN DE TIMEOUT ---
+                // Si está en PLAY y el movimiento es hacia ADELANTE (> 0) -> 10ms
+                // En cualquier otro caso (Atrás o Pausa) -> 100ms
+                var timeout = (isPlaying && newValue > 0) ? INERTIA_TIMEOUT_MS : INERTIA_TIMEOUT_MS_PAUSE;
 
-                // Si el plato va más lento que el timeout correspondiente, salir
-                if (delta > currentTimeout) {
+                // Si el mensaje tardó más que el timeout actual, matamos el scratch
+                if (delta > timeout) {
                     NumarkPartyMix.exitScratchMode(deckNum);
                     return; 
                 }
 
+                // Refrescamos el timer de seguridad con el timeout elegido
                 if (scratchStopTimer[deckNum]) engine.stopTimer(scratchStopTimer[deckNum]);
-                scratchStopTimer[deckNum] = engine.beginTimer(currentTimeout + 10, function() {
+                scratchStopTimer[deckNum] = engine.beginTimer(timeout + 10, function() {
                     if (!isDeckTouched[deckNum]) NumarkPartyMix.exitScratchMode(deckNum);
                 }, true);
             }
-            engine.scratchTick(deckNum, newValue);
-        } else {
-            if (now - lastScratchExitTime[deckNum] < POST_SCRATCH_LOCKOUT_MS) return;
 
-            if (!engine.getValue(group, "play")) {
-                engine.setValue(group, 'jog', newValue * PAUSE_JOG_SENSITIVITY);
-            } else {
-                engine.setValue(group, 'jog', newValue);
-            }
+            // Aplicar el movimiento
+            engine.scratchTick(deckNum, newValue);
+            
+        } else {
+            // --- MODO JOG / PITCH BEND ---
+            if (now - lastScratchExitTime[deckNum] < POST_SCRATCH_LOCKOUT_MS) return;
+            if (!engine.getValue(group, "play")) engine.setValue(group, 'jog', newValue * PAUSE_JOG_SENSITIVITY);
+            else engine.setValue(group, 'jog', newValue);
         }
     };
+
 
 
 

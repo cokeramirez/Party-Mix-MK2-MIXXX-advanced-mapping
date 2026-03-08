@@ -81,12 +81,11 @@
             </control>
             <control>
                 <group>[Library]</group>
-                <key>MoveVertical</key>
-                <description>MIDI Learned from 270 messages.</description>
+                <key>NumarkPartyMix.moveVertical</key> <!-- Cambiado de MoveVertical a tu script -->
                 <status>0xBF</status>
                 <midino>0x00</midino>
                 <options>
-                    <selectknob/>
+                    <script-binding/> <!-- Importante: que sea script-binding -->
                 </options>
             </control>
             <control>
@@ -242,26 +241,8 @@
                     <script-binding/>
                 </options>
             </control>
-            <control>
-                <group>[Library]</group>
-                <key>MoveFocus</key>
-                <description>MIDI Learned from 2 messages.</description>
-                <status>0x8F</status>
-                <midino>0x07</midino>
-                <options>
-                    <normal/>
-                </options>
-            </control>
-            <control>
-                <group>[Library]</group>
-                <key>MoveFocus</key>
-                <description>MIDI Learned from 2 messages.</description>
-                <status>0x9F</status>
-                <midino>0x07</midino>
-                <options>
-                    <normal/>
-                </options>
-            </control>
+
+
             <control>
                 <group>[Library]</group>
                 <key>NumarkPartyMix.toggleView</key>

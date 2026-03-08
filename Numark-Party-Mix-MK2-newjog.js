@@ -39,6 +39,8 @@ var NumarkPartyMix = function() {
 
     this.isPadModeHeld = false; 
 
+    var focusSidePane = true; 
+
     var isScratchEnabled = { 1: true, 2: true }; 
 
     // --- VARIABLES DE CONFIGURACIÓN ---
@@ -565,12 +567,32 @@ var NumarkPartyMix = function() {
     };
 
     this.toggleView = function(channel, control, value, status, group) {
-        var toggleFocus = function() { focusSidePane = !focusSidePane; };
-        var selectSidebar = function() {
-            if (focusSidePane) { engine.setValue('[Library]', 'GoToItem', 1); }
+        
+        // ACCIÓN 1: Cambio de panel (Click corto)
+        // Se ejecutará SOLO si sueltas el botón ANTES de los 500ms.
+        var shortPressAction = function() {
+            focusSidePane = !focusSidePane;
+            engine.setValue("[Library]", "MoveFocus", 1);
         };
-        longPressHelper(status, control, LIBRARY_LONGPRESS_DELAY, null, selectSidebar, toggleFocus, null);
+
+        // ACCIÓN 2: Abrir/Cerrar carpeta (Click largo)
+        // Se ejecutará automáticamente a los 500ms aunque no hayas soltado el botón.
+        var longPressAction = function() {
+            // Si estábamos en la lista de temas, forzamos el foco al lateral para poder abrir la carpeta
+            if (!focusSidePane) {
+                focusSidePane = true;
+                engine.setValue("[Library]", "MoveFocus", 1);
+            }
+            engine.setValue('[Playlist]', 'ToggleSelectedSidebarItem', 1);
+        };
+
+        // Ejecutamos el helper con este orden de funciones:
+        // Argumento 4 (onDown): null -> No hace nada al tocar el botón.
+        // Argumento 5 (onTimerEndWhileDown): longPressAction -> Abre carpeta a los 500ms.
+        // Argumento 6 (onUpBeforeTimerEnd): shortPressAction -> Cambia panel al soltar rápido.
+        longPressHelper(status, control, LIBRARY_LONGPRESS_DELAY, null, longPressAction, shortPressAction, null);
     };
+
 
     this.shutdown = function() {
         midi.sendShortMsg(0x94, PAD_MODE_CONTROL_BYTE.CUE, ON);
@@ -724,6 +746,17 @@ var NumarkPartyMix = function() {
     this.onLightBeat = function(value, group) {
         var effect = LightPatterns[currentLightPattern];
         if (effect && effect.onBeat) effect.onBeat(script.deckFromGroup(group), value);
+    };
+
+    this.moveVertical = function(channel, control, value, status, group) {
+        var encoderValue = (value == 0x01) ? 1 : -1;
+        if (focusSidePane) {
+            // Si el foco está en el lateral, mueve las carpetas
+            engine.setValue('[Playlist]', 'SelectPlaylist', encoderValue);
+        } else {
+            // Si el foco está en la lista, mueve los tracks
+            engine.setValue('[Playlist]', 'SelectTrackKnob', encoderValue);
+        }
     };
 };
 

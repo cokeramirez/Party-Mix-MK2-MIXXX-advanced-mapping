@@ -610,8 +610,18 @@ var NumarkPartyMix = function() {
         if (isManualBraking[deck]) { engine.brake(deck, false); isManualBraking[deck] = false; engine.setValue(group, "play", 1); return; }
         if (!engine.getValue(group, "play")) { engine.setValue(group, "play", 1); } 
         else {
-            if (isDeckTouched[deck]) { engine.setValue(group, "play", 0); } 
-            else { isManualBraking[deck] = true; engine.brake(deck, true, 100); }
+            if (isDeckTouched[deck]) { 
+                engine.setValue(group, "play", 0); 
+            } 
+            else if (engine.isScratching(deck)) {
+                // Si hay backspin (scratch activo pero sin toque), solo quitamos el Play
+                engine.setValue(group, "play", 0);
+            } 
+            else {
+                // Si no hay movimiento de scratch, aplicamos el freno normal
+                isManualBraking[deck] = true; 
+                engine.brake(deck, true, 100); 
+            }
         }
     };
 

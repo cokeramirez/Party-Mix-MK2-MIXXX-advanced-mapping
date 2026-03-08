@@ -42,8 +42,8 @@ var NumarkPartyMix = function() {
     var isScratchEnabled = { 1: true, 2: true }; 
 
     // --- VARIABLES DE CONFIGURACIÓN ---
-    var INERTIA_TIMEOUT_MS = 10;        
-    var INERTIA_TIMEOUT_MS_PAUSE = 100; 
+    var INERTIA_TIMEOUT_MS = 20;        
+    var INERTIA_TIMEOUT_MS_PAUSE = 50; 
     var POST_SCRATCH_LOCKOUT_MS = 250; 
     var PAUSE_JOG_SENSITIVITY = 0.1;    
 

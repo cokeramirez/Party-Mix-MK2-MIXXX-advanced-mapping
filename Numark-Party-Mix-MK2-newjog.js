@@ -10,11 +10,9 @@ This versions tries to make a more efficient jog swheel management for scratch
 
 var NumarkPartyMix = function() {
 
-    var SCRATCH_LONGPRESS_DELAY = 0;
+
     var LIBRARY_LONGPRESS_DELAY = 500;
-    var FLASH_DELAY = 200;
-    var USE_FLASH = false;
-    var USE_SAMPLE_BANK = true;
+
 
     var RESOLUTION = 310; 
     var RECORD_SPEED = 33 + (1 / 3);
@@ -29,10 +27,8 @@ var NumarkPartyMix = function() {
     var FLASH = 0x40; 
 
     var SELF = 'SELF';
-    var NOOP = 'NOOP';
-    var PAD_PRESS = 'PAD_PRESS';
 
-    var PFL_CONTROL = 0x1B;
+
 
     var hotcuesDownCount = { 1: 0, 2: 0 };
     var isManualBraking = { 1: false, 2: false }; 

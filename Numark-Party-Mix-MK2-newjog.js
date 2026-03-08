@@ -655,6 +655,11 @@ var NumarkPartyMix = function() {
         }
     };
 
+
+    this.handlePfl = function(channel, control, value, status, group) {
+        engine.setValue(group, 'pfl', value ? 1 : 0);
+    };
+
     this.repaintPads = function(deck) {
         var mode = deckPadMode['DECK' + deck];
         var status = (deck === 1) ? 0x94 : 0x95;

@@ -658,15 +658,15 @@ var NumarkPartyMix = function() {
             else if (mode === 'SAMPLER') {
                 // Si mantenemos "Pad Mode", mostramos la segunda capa (Samplers 5-8)
                 if (NumarkPartyMix.isPadModeHeld) {
-                    var logicPadShift = logicPadNum + 4; // Mapea Pad 1->5, 2->6, 3->7, 4->8
-                    
-                    if (logicPadShift <= 7) {
-                        var sg = '[Sampler' + logicPadShift + ']';
+                    if(logicPadNum <= 3){
+                        
+                        var sg = '[Sampler' + (logicPadNum + 4) + ']';
                         midiVal = engine.getValue(sg, 'play') ? 0x7F : (engine.getValue(sg, 'track_loaded') ? 0x01 : 0x00);
-                    } else {
-                        // El Pad 8 es el "Sampler Panic", lo dejamos en DIM (tenue)
-                        midiVal = 0x01;
                     }
+                    else {
+                        midiVal = 0x7F;
+                    }
+                    
                 } else {
                     // Capa normal: Samplers 1-4
                     var sg = '[Sampler' + logicPadNum + ']';

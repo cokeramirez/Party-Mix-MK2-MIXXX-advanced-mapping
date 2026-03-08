@@ -618,9 +618,28 @@ var NumarkPartyMix = function() {
     this.onTrackLoaded = function(value, group) {
         if (value === 1) {
             var deckNum = script.deckFromGroup(group);
+
+            // --- FUNCIONALIDADES RESTAURADAS ---
+            // 1. Reset de Audio: Apaga los 2 efectos del deck y centra la perilla Meta
+            for (var i = 1; i <= 2; i++) {
+                var effectGroup = '[EffectRack1_EffectUnit' + deckNum + '_Effect' + i + ']';
+                engine.setValue(effectGroup, 'enabled', 0);
+                engine.setValue(effectGroup, 'meta', 0.5);
+            }
+
+            // 2. Reset de Loop: Devuelve el tamaño del loop a 4 beats por defecto
+            engine.setValue(group, 'beatloop_size', 4);
+            // ------------------------------------
+
+            // Lógica original del script NewJog
             isManualBraking[deckNum] = false; 
             hotcuesDownCount[deckNum] = 0;
-            if (engine.isScratching(deckNum)) engine.scratchDisable(deckNum);
+            
+            if (engine.isScratching(deckNum)) {
+                engine.scratchDisable(deckNum);
+            }
+
+            // Forzar modo CUE en los pads al cargar
             deckPadMode['DECK' + deckNum] = 'CUE'; 
             NumarkPartyMix.setPadMode(null, null, 1, (deckNum === 1 ? 0x94 : 0x95), group);
         }
@@ -637,8 +656,22 @@ var NumarkPartyMix = function() {
             if (mode === 'CUE') midiVal = engine.getValue(group, 'hotcue_' + logicPadNum + '_enabled') ? 0x7F : 0x00;
             else if (mode === 'LOOP') midiVal = (logicPadNum === 1) ? (engine.getValue(group, 'loop_enabled') ? flashVal : 0x00) : 0x01;
             else if (mode === 'SAMPLER') {
-                var sg = '[Sampler' + logicPadNum + ']';
-                midiVal = engine.getValue(sg, 'play') ? 0x7F : (engine.getValue(sg, 'track_loaded') ? 0x01 : 0x00);
+                // Si mantenemos "Pad Mode", mostramos la segunda capa (Samplers 5-8)
+                if (NumarkPartyMix.isPadModeHeld) {
+                    var logicPadShift = logicPadNum + 4; // Mapea Pad 1->5, 2->6, 3->7, 4->8
+                    
+                    if (logicPadShift <= 7) {
+                        var sg = '[Sampler' + logicPadShift + ']';
+                        midiVal = engine.getValue(sg, 'play') ? 0x7F : (engine.getValue(sg, 'track_loaded') ? 0x01 : 0x00);
+                    } else {
+                        // El Pad 8 es el "Sampler Panic", lo dejamos en DIM (tenue)
+                        midiVal = 0x01;
+                    }
+                } else {
+                    // Capa normal: Samplers 1-4
+                    var sg = '[Sampler' + logicPadNum + ']';
+                    midiVal = engine.getValue(sg, 'play') ? 0x7F : (engine.getValue(sg, 'track_loaded') ? 0x01 : 0x00);
+                }
             } else if (mode === 'EFFECT') {
                 if (NumarkPartyMix.isPadModeHeld) {
                     if (logicPadNum === 1) midiVal = engine.getValue(group, 'quantize') ? 0x7F : 0x00;

@@ -840,6 +840,7 @@ var NumarkPartyMix = function() {
                 engine.stopTimer(scratchStopTimer[deckNum]);
                 scratchStopTimer[deckNum] = 0;
             }
+            // Al tocar el plato, si estaba frenando, paramos el efecto
             if (isManualBraking[deckNum]) {
                 engine.brake(deckNum, false);
                 engine.setValue(group, "play", 0);
@@ -852,12 +853,11 @@ var NumarkPartyMix = function() {
             isDeckTouched[deckNum] = false;
             if (scratchStopTimer[deckNum]) engine.stopTimer(scratchStopTimer[deckNum]);
             scratchStopTimer[deckNum] = engine.beginTimer(INERTIA_TIMEOUT_MS + 5, function() {
-                if (!isDeckTouched[deckNum]) {
-                    NumarkPartyMix.exitScratchMode(deckNum);
-                }
+                if (!isDeckTouched[deckNum]) NumarkPartyMix.exitScratchMode(deckNum);
             }, true);
         }
     };
+
 
 
     // --- FUNCIÓN WHEEL TURN (Movimiento del Jog) ---
@@ -876,30 +876,21 @@ var NumarkPartyMix = function() {
                 }
                 if (scratchStopTimer[deckNum]) engine.stopTimer(scratchStopTimer[deckNum]);
                 scratchStopTimer[deckNum] = engine.beginTimer(INERTIA_TIMEOUT_MS + 10, function() {
-                    if (!isDeckTouched[deckNum]) {
-                        NumarkPartyMix.exitScratchMode(deckNum);
-                    }
+                    if (!isDeckTouched[deckNum]) NumarkPartyMix.exitScratchMode(deckNum);
                 }, true);
             }
             engine.scratchTick(deckNum, newValue);
-            
         } else {
-            // --- MODO JOG (PITCH BEND / SEEK) ---
-            if (now - lastScratchExitTime[deckNum] < POST_SCRATCH_LOCKOUT_MS) {
-                return;
-            }
+            if (now - lastScratchExitTime[deckNum] < POST_SCRATCH_LOCKOUT_MS) return;
 
-            var isPlaying = engine.getValue(group, "play");
-            
-            if (!isPlaying) {
-                // SI ESTÁ EN PAUSA: Aplicamos sensibilidad de precisión (tipo Serato)
+            if (!engine.getValue(group, "play")) {
                 engine.setValue(group, 'jog', newValue * PAUSE_JOG_SENSITIVITY);
             } else {
-                // SI ESTÁ SONANDO: Pitch bend normal (1:1)
                 engine.setValue(group, 'jog', newValue);
             }
         }
     };
+
 
 
 
@@ -974,89 +965,85 @@ var NumarkPartyMix = function() {
     };
     
     this.handleStandardCue = function(channel, control, value, status, group) {
-        var deck = (status === 0x91 || status === 0x81) ? 2 : 1;
+        var deck = script.deckFromGroup(group);
         var isPlaying = engine.getValue(group, "play");
 
         if (value > 0) {
+            // Presionado: Aumentamos contador de botones activos
             hotcuesDownCount[deck]++;
             
-            // 1. Si hay freno activo, lo matamos
             if (isManualBraking[deck]) {
                 engine.brake(deck, false);
                 engine.setValue(group, "play", 0);
                 isManualBraking[deck] = false;
             }
 
-            // 2. CASO BACKSPIN (Ahora detectado por estado de scratch + no toque)
+            // Si venimos de un backspin de inercia, saltar al cue y parar
             if (engine.isScratching(deck) && !isDeckTouched[deck]) {
                 engine.setValue(group, "cue_gotoandstop", 1);
                 return; 
             }
 
-            // 3. Lógica Normal
             if (isPlaying) {
                 engine.setValue(group, "cue_gotoandstop", 1);
-            } 
-            else {
-                if (isDeckTouched[deck]) {
-                    engine.setValue(group, "cue_set", 1);
-                } 
-                else {
-                    engine.setValue(group, "cue_default", 1);
-                }
+            } else {
+                if (isDeckTouched[deck]) engine.setValue(group, "cue_set", 1);
+                else engine.setValue(group, "cue_default", 1);
             }
         } else {
+            // Soltado: Reducimos contador
             hotcuesDownCount[deck]--;
             engine.setValue(group, "cue_default", 0);
         }
         
         if (hotcuesDownCount[deck] < 0) hotcuesDownCount[deck] = 0;
     };
+
+
+
  
     this.handlePlayWithBrake = function(channel, control, value, status, group) {
         if (value === 0) return; 
 
-        var deck = (status === 0x91) ? 2 : 1; 
+        var deck = script.deckFromGroup(group);
         var isPlaying = engine.getValue(group, "play");
-        var activeButtons = hotcuesDownCount[deck];
+        var isAnyButtonHeld = (hotcuesDownCount[deck] > 0);
 
-        // 1. Prioridad: Botones apretados
-        if (activeButtons > 0) {
-            engine.brake(deck, false);
+        // 1. PRIORIDAD: Si hay un dedo en CUE o Hotcue, confirmar reproducción.
+        // El secreto es el 0 seguido del 1 para "enganchar" el Play.
+        if (isAnyButtonHeld) {
+            engine.setValue(group, "play", 0);
+            engine.setValue(group, "play", 1);
+            isManualBraking[deck] = false;
+            return;
+        }
+
+        // 2. Si estamos frenando (Vinyl Brake activo), retomar inmediatamente.
+        if (isManualBraking[deck]) {
+            engine.brake(deck, false); 
             isManualBraking[deck] = false;
             engine.setValue(group, "play", 1); 
             return;
         }
 
-        // 2. Si hay un BACKSPIN corriendo
-        if (engine.isScratching(deck) && !isDeckTouched[deck]) {
-            engine.setValue(group, "play", isPlaying ? 0 : 1);
-            return;
-        }
-
-        // 3. Si el freno (Vinyl Brake) estaba actuando
-        if (isManualBraking[deck]) {
-            engine.brake(deck, false);
-            isManualBraking[deck] = false;
+        // 3. Lógica normal de Inicio / Parada
+        if (!isPlaying) {
             engine.setValue(group, "play", 1);
-            return;
-        }
-
-        // 4. Lógica normal
-        if (isPlaying === 0) {
-            isManualBraking[deck] = false;
-            engine.setValue(group, "play", 1);
-        } 
-        else {
+        } else {
+            // Si no hay dedos en pads y está sonando, aplicamos freno
             if (isDeckTouched[deck]) {
                 engine.setValue(group, "play", 0);
-            } 
-            else {
+            } else {
                 isManualBraking[deck] = true;
                 engine.brake(deck, true, 100);
             }
         }
     };
+
+
+
+
+
 
     this.onTrackLoaded = function(value, group, control) {
         if (value === 1) {

@@ -54,7 +54,8 @@ var NumarkPartyMix = function() {
     var lastMovementTime = { 1: 0, 2: 0 };
 
     // --- VARIABLES DE CONFIGURACIÓN ---
-    var INERTIA_TIMEOUT_MS = 20; // El tiempo que esperaremos entre paquetes (tu variable X)
+    var INERTIA_TIMEOUT_MS = 10;        // 10ms en PLAY: Máxima responsividad
+    var INERTIA_TIMEOUT_MS_PAUSE = 100; // 100ms en PAUSA: Navegación fluida
     var POST_SCRATCH_LOCKOUT_MS = 250; // Y ms: El "Escudo" que ignora la cola de mensajes (Nudge/Jog)
     var PAUSE_JOG_SENSITIVITY = 0.1;    // SENSIBILIDAD EN PAUSA (0.1 = 10% de la velocidad normal)
 
@@ -840,7 +841,6 @@ var NumarkPartyMix = function() {
                 engine.stopTimer(scratchStopTimer[deckNum]);
                 scratchStopTimer[deckNum] = 0;
             }
-            // Al tocar el plato, si estaba frenando, paramos el efecto
             if (isManualBraking[deckNum]) {
                 engine.brake(deckNum, false);
                 engine.setValue(group, "play", 0);
@@ -851,12 +851,18 @@ var NumarkPartyMix = function() {
             }
         } else {
             isDeckTouched[deckNum] = false;
+
+            // --- LÓGICA ADAPTATIVA AL SOLTAR ---
+            var isPlaying = engine.getValue(group, "play");
+            var currentTimeout = isPlaying ? INERTIA_TIMEOUT_MS : INERTIA_TIMEOUT_MS_PAUSE;
+
             if (scratchStopTimer[deckNum]) engine.stopTimer(scratchStopTimer[deckNum]);
-            scratchStopTimer[deckNum] = engine.beginTimer(INERTIA_TIMEOUT_MS + 5, function() {
+            scratchStopTimer[deckNum] = engine.beginTimer(currentTimeout + 5, function() {
                 if (!isDeckTouched[deckNum]) NumarkPartyMix.exitScratchMode(deckNum);
             }, true);
         }
     };
+
 
 
 
@@ -870,12 +876,19 @@ var NumarkPartyMix = function() {
 
         if (engine.isScratching(deckNum)) {
             if (!isDeckTouched[deckNum]) {
-                if (delta > INERTIA_TIMEOUT_MS) {
+                
+                // --- LÓGICA ADAPTATIVA DURANTE EL MOVIMIENTO ---
+                var isPlaying = engine.getValue(group, "play");
+                var currentTimeout = isPlaying ? INERTIA_TIMEOUT_MS : INERTIA_TIMEOUT_MS_PAUSE;
+
+                // Si el plato va más lento que el timeout correspondiente, salir
+                if (delta > currentTimeout) {
                     NumarkPartyMix.exitScratchMode(deckNum);
                     return; 
                 }
+
                 if (scratchStopTimer[deckNum]) engine.stopTimer(scratchStopTimer[deckNum]);
-                scratchStopTimer[deckNum] = engine.beginTimer(INERTIA_TIMEOUT_MS + 10, function() {
+                scratchStopTimer[deckNum] = engine.beginTimer(currentTimeout + 10, function() {
                     if (!isDeckTouched[deckNum]) NumarkPartyMix.exitScratchMode(deckNum);
                 }, true);
             }
@@ -890,6 +903,7 @@ var NumarkPartyMix = function() {
             }
         }
     };
+
 
 
 

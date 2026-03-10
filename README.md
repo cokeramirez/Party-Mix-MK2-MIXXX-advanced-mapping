@@ -2,6 +2,8 @@
 
 Advanced MIDI mapping for the **Numark Party Mix MK2**. This script implements professional features such as vinyl braking, momentum-based backspins, and a custom synchronized light show system.
 
+There are two versions, the new jog version tries a different way of reacting to the scratch to make it more snappy. It has some problems withthe browse knob, but it's working
+
 ## 🛠 Installation
 1.  Download `Numark-Party-Mix-MK2-advanced.js` and `Numark Party Mix MK2 advanced.midi.xml`.
 2.  Place the files in your Mixxx controller folder:

@@ -35,7 +35,7 @@ var NumarkPartyMix = function() {
 
     this.isPadModeHeld = false; 
 
-    var focusSidePane = true; 
+
 
     var isScratchEnabled = { 1: true, 2: true }; 
 
@@ -50,7 +50,7 @@ var NumarkPartyMix = function() {
     var lastMovementTime = { 1: 0, 2: 0 };
     var lastScratchExitTime = { 1: 0, 2: 0 }; 
 
-    var focusSidePane = true; 
+
     var lastLightValues = { 0x40: -1, 0x41: -1, 0x43: -1 }; 
     var currentLightPattern = 0;
 
@@ -564,30 +564,27 @@ var NumarkPartyMix = function() {
 
     this.toggleView = function(channel, control, value, status, group) {
         
-        // ACCIÓN 1: Cambio de panel (Click corto)
-        // Se ejecutará SOLO si sueltas el botón ANTES de los 500ms.
+        // ACCIÓN 1: Cambio de panel (Click corto al soltar)
         var shortPressAction = function() {
-            focusSidePane = !focusSidePane;
-            engine.setValue("[Library]", "MoveFocus", 1);
+            var currentWidget = engine.getValue("[Library]", "focused_widget");
+            
+            // Prioridad: Si estamos en tracks (3), saltamos a Sidebar (2).
+            // Si estamos en cualquier otra cosa (Sidebar, buscador, etc), vamos a Tracks (3).
+            var nextWidget = (currentWidget === 3) ? 2 : 3;
+            
+            engine.setValue("[Library]", "focused_widget", nextWidget);
         };
 
-        // ACCIÓN 2: Abrir/Cerrar carpeta (Click largo)
-        // Se ejecutará automáticamente a los 500ms aunque no hayas soltado el botón.
+        // ACCIÓN 2: Expandir/Accionar (Click largo a los 500ms)
         var longPressAction = function() {
-            // Si estábamos en la lista de temas, forzamos el foco al lateral para poder abrir la carpeta
-            if (!focusSidePane) {
-                focusSidePane = true;
-                engine.setValue("[Library]", "MoveFocus", 1);
-            }
-            engine.setValue('[Playlist]', 'ToggleSelectedSidebarItem', 1);
+            // GoToItem expande carpetas en el sidebar o carga tracks según el foco
+            engine.setValue("[Library]", "GoToItem", 1);
         };
 
-        // Ejecutamos el helper con este orden de funciones:
-        // Argumento 4 (onDown): null -> No hace nada al tocar el botón.
-        // Argumento 5 (onTimerEndWhileDown): longPressAction -> Abre carpeta a los 500ms.
-        // Argumento 6 (onUpBeforeTimerEnd): shortPressAction -> Cambia panel al soltar rápido.
+        // Usamos el helper existente en tu script
         longPressHelper(status, control, LIBRARY_LONGPRESS_DELAY, null, longPressAction, shortPressAction, null);
     };
+
 
 
     this.shutdown = function() {
@@ -745,15 +742,10 @@ var NumarkPartyMix = function() {
     };
 
     this.moveVertical = function(channel, control, value, status, group) {
-        var encoderValue = (value == 0x01) ? 1 : -1;
-        if (focusSidePane) {
-            // Si el foco está en el lateral, mueve las carpetas
-            engine.setValue('[Playlist]', 'SelectPlaylist', encoderValue);
-        } else {
-            // Si el foco está en la lista, mueve los tracks
-            engine.setValue('[Playlist]', 'SelectTrackKnob', encoderValue);
-        }
-    };
+    // El encoder envía 1 para derecha (bajar) y 127 para izquierda (subir)
+    var val = (value === 0x01) ? 1 : -1;
+    engine.setValue("[Library]", "MoveVertical", val);
+};
 };
 
 NumarkPartyMix = new NumarkPartyMix();

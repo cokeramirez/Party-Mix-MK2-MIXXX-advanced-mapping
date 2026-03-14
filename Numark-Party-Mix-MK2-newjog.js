@@ -569,21 +569,35 @@ var NumarkPartyMix = function() {
             var currentWidget = engine.getValue("[Library]", "focused_widget");
             
             // Prioridad: Si estamos en tracks (3), saltamos a Sidebar (2).
-            // Si estamos en cualquier otra cosa (Sidebar, buscador, etc), vamos a Tracks (3).
+            // Si estamos en cualquier otra cosa, vamos a Tracks (3).
             var nextWidget = (currentWidget === 3) ? 2 : 3;
             
             engine.setValue("[Library]", "focused_widget", nextWidget);
         };
 
-        // ACCIÓN 2: Expandir/Accionar (Click largo a los 500ms)
+        // ACCIÓN 2: Acción contextual (Click largo a los 500ms)
         var longPressAction = function() {
-            // GoToItem expande carpetas en el sidebar o carga tracks según el foco
-            engine.setValue("[Library]", "GoToItem", 1);
+            var currentWidget = engine.getValue("[Library]", "focused_widget");
+
+            if (currentWidget === 2) {
+                // Si estamos en el Sidebar: Expandir/Cerrar carpeta
+                engine.setValue("[Library]", "GoToItem", 1);
+            } 
+            else if (currentWidget === 3) {
+                // Si estamos en la Lista de temas: Maximizar/Restaurar biblioteca
+                var isMaximized = engine.getValue("[Skin]", "show_maximized_library");
+                engine.setValue("[Skin]", "show_maximized_library", !isMaximized);
+            }
+            else {
+                // Por defecto en otros casos (ej. buscador), usar acción nativa
+                engine.setValue("[Library]", "GoToItem", 1);
+            }
         };
 
-        // Usamos el helper existente en tu script
+        // Ejecución mediante el helper de pulsación larga
         longPressHelper(status, control, LIBRARY_LONGPRESS_DELAY, null, longPressAction, shortPressAction, null);
     };
+
 
 
 

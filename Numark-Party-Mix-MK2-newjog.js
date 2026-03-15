@@ -77,8 +77,28 @@ var NumarkPartyMix = function() {
                 var b = Math.floor((Math.sin(angle + 4) + 1) * 63.5);
                 NumarkPartyMix.setPartyLights(r, g, b);
             }
-        },
-        {
+        },{
+            name: "Random Beat Mask",
+            lastState: -1,
+            onBeat: function(deck, value) {
+                if (value <= 0) return;
+                var newState;
+                do {
+                    newState = Math.floor(Math.random() * 8);
+                } while (newState === this.lastState);
+                
+                this.lastState = newState;
+
+                var r = (newState & 1) ? 127 : 0;
+                var g = (newState & 2) ? 127 : 0;
+                var b = (newState & 4) ? 127 : 0;
+                
+                NumarkPartyMix.setPartyLights(r, g, b);
+            },
+            onTick: function(deck) { 
+                // No hace nada, pero se deja vacío para evitar errores
+            }
+        },{
             name: "One beam",
             beatCounter: 0,
             colorIdx: 0,

@@ -50,7 +50,7 @@ var NumarkPartyMix = function() {
     var lastMovementTime = { 1: 0, 2: 0 };
     var lastScratchExitTime = { 1: 0, 2: 0 }; 
 
-
+    var deckPadMode = { 'DECK1': 'CUE', 'DECK2': 'CUE' };
     var lastLightValues = { 0x40: -1, 0x41: -1, 0x43: -1 }; 
     var currentLightPattern = 0;
 
@@ -178,7 +178,7 @@ var NumarkPartyMix = function() {
         if (deckPadMode['DECK2'] === 'LOOP' && engine.getValue('[Channel2]', 'loop_enabled')) NumarkPartyMix.repaintPads(2);
     };
 
-    var deckPadMode = { 'DECK1': 'CUE', 'DECK2': 'CUE' };
+
     var padCallbackMappings = {};
 
     var syncPadLedCallbackHelper = function(group, control, valueByte) {

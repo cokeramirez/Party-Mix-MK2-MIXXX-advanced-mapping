@@ -1,71 +1,74 @@
-# Numark Party Mix MK2 - Advanced Mixxx Mapping
+# Numark Party Mix MK2 - Mixxx Mapping (New Jog Version)
 
-Advanced MIDI mapping for the **Numark Party Mix MK2**. This script implements professional features such as vinyl braking, momentum-based backspins, and a custom synchronized light show system.
-
-There are two versions, the new jog version tries a different way of reacting to the scratch to make it more snappy. It has some problems withthe browse knob, but it's working
+MIDI mapping for the **Numark Party Mix MK2**. This version focuses on improved jog wheel response and extra pad functions.
 
 ## 🛠 Installation
-1.  Download `Numark-Party-Mix-MK2-advanced.js` and `Numark Party Mix MK2 advanced.midi.xml`.
-2.  Place the files in your Mixxx controller folder:
-    *   **Windows:** `Documents\Mixxx\controllers`
-    *   **macOS:** `~/Library/Application Support/Mixxx/controllers`
-    *   **Linux:** `~/.mixxx/controllers`
-3.  In Mixxx Preferences, go to **Controllers** and select **"Numark Party Mix MK2 Advanced"**.
+1.  Download `Numark-Party-Mix-MK2-newjog.js` and `.midi.xml`.
+2.  Place them in your Mixxx controller folder
+3.  In Mixxx Preferences, select **"Numark Party Mix MK2 NewJog"**.
 
 ---
 
 ## ⚡ Track Load Automation
-When a track is loaded:
-*   **Effects 1 & 2** are disabled.
-*   **Effect Meta Knobs** reset to 50%.
-*   **Loop size** resets to 4 beats.
-*   **Pad Mode** automatically switches to **Hotcue**.
+When you load a track, the script automatically:
+*   Turns off **Effects 1 & 2**.
+*   Resets **Effect Meta Knobs** to 50% (middle).
+*   Resets **Loop size** to 4 beats.
+*   Sets **Pad Mode** to **Hotcue**.
+*   Clears any active vinyl brakes or scratches.
 
 ---
 
 ## 🎮 Pad Modes
-Each mode has a primary layer and a secondary layer (accessed by holding the **PAD MODE** button).
+Functions change when holding the **PAD MODE** button.
 
 ### 1. Hotcue Mode
-*   **Primary:** Set or Trigger Hotcues 1-4.
-*   **PAD MODE + Pad:** Delete Hotcues 1-4.
+*   **Pads 1-4:** Set/Trigger Hotcues.
+*   **PAD MODE + Pads:** Delete Hotcues.
 
 ### 2. Loop Mode
-*   **Primary:** 1: Toggle Loop, 2: Loop Roll, 3: Half Size, 4: Double Size.
-*   **PAD MODE + Pad:** 5/6: Beatjump (1 Beat), 7/8: Beatjump (4 Beats).
+*   **Pads 1-4:** Toggle Loop, Loop Roll, Half Loop, Double Loop.
+*   **PAD MODE + Pads:** Beatjump 1 beat (5/6) and 4 beats (7/8).
 
 ### 3. Sampler Mode
-*   **Primary:** Trigger Samplers 1-4.
-*   **PAD MODE + Pad:** 5-7: Trigger Samplers 5-7, **Pad 8: Panic Stop** (Stops all samplers).
+*   **Pads 1-4:** Trigger Samplers 1-4.
+*   **PAD MODE + Pads:** Trigger Samplers 5-7. **Pad 8 stops all samplers.**
 
 ### 4. Effect Mode
-*   **Primary:** 
-    *   Pads 1-2: Toggle Effect 1 and Effect 2.
-    *   Pads 3-4: Decrease/Increase Meta Knob intensity.
-*   **PAD MODE + Pad:** 
-    *   Pad 5: Quantize Toggle.
-    *   Pad 6: Pitch Range Cycle (8%, 16%, 50%).
-    *   Pad 7: Scratch Mode Toggle.
-    *   **Pad 8: Party Light Mode Cycle.**
+*   **Pads 1-2:** Toggle FX 1 and FX 2.
+*   **Pads 3-4:** Move Meta Knob down/up.
+*   **PAD MODE + Pads:**
+    *   Pad 5: Toggle Quantize.
+    *   Pad 6: Change Pitch Range (8%, 16%, 50%).
+    *   Pad 7: Enable/Disable Scratch (Jog touch).
+    *   **Pad 8: Change Light Mode.**
 
 ---
 
-## 🕹 Playback & Jog Wheels
-*   **Play/Pause:** Starts playback. If playing, it triggers a **Vinyl Brake** (simulated motor stop).
+## 🕹 Playback & Jogs
+*   **Play/Pause:** Starts music. If already playing, it triggers a **Vinyl Brake** effect.
 *   **Jog Wheels:** 
-    *   **Touch-to-Scratch:** Standard scratch behavior (can be toggled off via FX Pad 7).
-    *   **Inertia Backspin:** Flicking and releasing the wheel performs a backspin that follows the physical momentum of the platter.
-*   **Standard Cue:** Returns to the cue point. Instantly cancels active vinyl brakes or backspins.
-*   **Browse Knob:** Scroll through tracks. **Push** to toggle focus between the sidebar and track list.
+    *   Improved response for scratching and backspins. 
+    *   Backspins continue briefly after you let go based on speed.
+*   **Cue:** Standard cue behavior.
 
 ---
 
-## 💡 Dynamic Party Lights
-The rear lights are controlled via an optimized "Plugin System" that minimizes MIDI traffic. Cycle through modes using **PAD MODE + Pad 8 (in Effect Mode)**.
-
-1.  **Fade:** Ultra-smooth RGB color transitions synced to an 8-beat phrase.
-2.  **One Beam:** Randomized color rotation with cross-fading. Changes rhythm every 16 beats (1/1 to 1/2 beat).
-3.  **Sparkle Strobo:** High-energy color flashes with no repeats. Alternates between 1/4 and 1/2 beat subdivisions every 16 beats.
-4.  **White Beat:** Pure white pulses with organic decay. Changes rhythm every 16 beats (1/1 to 1/2 beat).
+## 📂 Library Navigation
+The **Browse Knob** has two ways to interact:
+*   **Scroll:** Move through the list.
+*   **Short Press:** Switch focus between the sidebar (folders) and the track list.
+*   **Long Press (0.5s):**
+    *   If in the sidebar: Open/Close folders.
+    *   If in the track list: Zoom in/out the library view (Maximize).
 
 ---
+
+## 💡 Party Lights
+Requires the hardware light button to be in **Mode 1** (Software Control).
+
+1.  **Fade:** RGB colors rotate every 8 beats.
+2.  **Random Beat Mask:** Chooses a random combination of the 3 lights on every beat. It never picks the same combination twice in a row.
+3.  **One Beam:** Flashes one color at a time; changes speed every 16 beats.
+4.  **Sparkle Strobo:** Fast color flashes.
+5.  **White Beat:** White pulse on every beat.

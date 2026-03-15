@@ -55,6 +55,8 @@ var NumarkPartyMix = function() {
     var currentLightPattern = 0;
     var lightMasterDeck = 0; // 0 = None, 1 = Deck 1, 2 = Deck 2
     this.lightTimer = 0;
+    var isSoftwareLightMode = false; // True only when hardware sends Value 1
+
     
     // LIGHTSHOWS
     
@@ -161,28 +163,43 @@ var NumarkPartyMix = function() {
         }
     ];
 
+    this.lightModeControl = function(channel, control, value, status, group) {
+        // Value 1 is the specific mode for Software Control
+        if (value === 1) {
+            isSoftwareLightMode = true;
+            // If a track is already playing, start the show immediately
+            if (lightMasterDeck !== 0) {
+                NumarkPartyMix.startLightShow();
+            }
+        } else {
+            // Any other value (0, 2, 3, 4) means the hardware is using 
+            // internal modes. We must stop our script.
+            isSoftwareLightMode = false;
+            NumarkPartyMix.stopLightShow();
+        }
+    };
+
 
     this.updateLightMaster = function(value, group) {
         var deck = script.deckFromGroup(group);
         var isPlaying = (value > 0);
 
         if (isPlaying) {
-            // Logic: If playing and no master is assigned, take control
             if (lightMasterDeck === 0) {
                 lightMasterDeck = deck;
-                NumarkPartyMix.startLightShow();
+                // ONLY start if the hardware is in Mode 1
+                if (isSoftwareLightMode) {
+                    NumarkPartyMix.startLightShow();
+                }
             }
         } else {
-            // Logic: If the deck that stopped was the master
             if (lightMasterDeck === deck) {
                 var otherDeck = (deck === 1) ? 2 : 1;
                 var otherIsPlaying = engine.getValue('[Channel' + otherDeck + ']', 'play');
 
                 if (otherIsPlaying) {
-                    // Hand-off: Switch to the other deck that is still playing
                     lightMasterDeck = otherDeck;
                 } else {
-                    // Shutdown: Nothing is playing anymore
                     lightMasterDeck = 0;
                     NumarkPartyMix.stopLightShow();
                 }
@@ -807,13 +824,13 @@ var NumarkPartyMix = function() {
     };
 
     this.onLightBeat = function(value, group) {
+        // If hardware is NOT in mode 1, ignore all beats
+        if (!isSoftwareLightMode) return;
+
         var deck = script.deckFromGroup(group);
-        // Only process the beat if it belongs to the Master Deck
         if (value > 0 && deck === lightMasterDeck) {
             var effect = LightPatterns[currentLightPattern];
-            if (effect && effect.onBeat) {
-                effect.onBeat(deck, value);
-            }
+            if (effect && effect.onBeat) effect.onBeat(deck, value);
         }
     };
 

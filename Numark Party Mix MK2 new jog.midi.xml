@@ -262,6 +262,15 @@
                 </options>
             </control>
             <control>
+                <group>[Master]</group>
+                <key>NumarkPartyMix.lightModeControl</key>
+                <status>0xBF</status> <!-- Channel 16 -->
+                <midino>0x20</midino> <!-- CC 32 -->
+                <options>
+                    <script-binding/>
+                </options>
+            </control>
+            <control>
                 <group>[Channel1]</group>
                 <key>rate</key>
                 <status>0xB0</status>

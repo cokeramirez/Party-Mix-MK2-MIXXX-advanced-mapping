@@ -53,8 +53,11 @@ var NumarkPartyMix = function() {
     var deckPadMode = { 'DECK1': 'CUE', 'DECK2': 'CUE' };
     var lastLightValues = { 0x40: -1, 0x41: -1, 0x43: -1 }; 
     var currentLightPattern = 0;
-
+    var lightMasterDeck = 0; // 0 = None, 1 = Deck 1, 2 = Deck 2
+    this.lightTimer = 0;
+    
     // LIGHTSHOWS
+    
     var LightPatterns = [
         {
             name: "Fade",
@@ -157,6 +160,52 @@ var NumarkPartyMix = function() {
             }
         }
     ];
+
+
+    this.updateLightMaster = function(value, group) {
+        var deck = script.deckFromGroup(group);
+        var isPlaying = (value > 0);
+
+        if (isPlaying) {
+            // Logic: If playing and no master is assigned, take control
+            if (lightMasterDeck === 0) {
+                lightMasterDeck = deck;
+                NumarkPartyMix.startLightShow();
+            }
+        } else {
+            // Logic: If the deck that stopped was the master
+            if (lightMasterDeck === deck) {
+                var otherDeck = (deck === 1) ? 2 : 1;
+                var otherIsPlaying = engine.getValue('[Channel' + otherDeck + ']', 'play');
+
+                if (otherIsPlaying) {
+                    // Hand-off: Switch to the other deck that is still playing
+                    lightMasterDeck = otherDeck;
+                } else {
+                    // Shutdown: Nothing is playing anymore
+                    lightMasterDeck = 0;
+                    NumarkPartyMix.stopLightShow();
+                }
+            }
+        }
+    };
+
+    this.startLightShow = function() {
+        if (this.lightTimer === 0) {
+            this.lightTimer = engine.beginTimer(30, function() { NumarkPartyMix.onLightTick(); });
+        }
+    };
+
+    this.stopLightShow = function() {
+        if (this.lightTimer !== 0) {
+            engine.stopTimer(this.lightTimer);
+            this.lightTimer = 0;
+        }
+        this.killLights(); // Ensure everything is OFF
+    };
+
+    
+
 
     var forEach = function(array, func) {
         for (var i = 0; i < array.length; i++) { func(array[i]); }
@@ -458,7 +507,10 @@ var NumarkPartyMix = function() {
 
         engine.connectControl('[Channel1]', 'beat_active', 'NumarkPartyMix.onLightBeat');
         engine.connectControl('[Channel2]', 'beat_active', 'NumarkPartyMix.onLightBeat');
-        this.lightTimer = engine.beginTimer(30, function() { NumarkPartyMix.onLightTick(); });
+
+        engine.connectControl('[Channel1]', 'play', 'NumarkPartyMix.updateLightMaster');
+        engine.connectControl('[Channel2]', 'play', 'NumarkPartyMix.updateLightMaster');
+        //this.lightTimer = engine.beginTimer(30, function() { NumarkPartyMix.onLightTick(); });
     }; 
 
     var longPressTimers = {};
@@ -745,14 +797,24 @@ var NumarkPartyMix = function() {
     this.getBeatPos = function(deck) { return engine.getValue('[Channel' + deck + ']', 'beat_distance') || 0; };
 
     this.onLightTick = function() {
-        var masterDeck = (engine.getValue('[Channel2]', 'play') && engine.getValue('[Channel2]', 'volume') > 0.1) ? 2 : 1;
+        // Double check: if no master, do nothing
+        if (lightMasterDeck === 0) return;
+
         var effect = LightPatterns[currentLightPattern];
-        if (effect && effect.onTick) effect.onTick(masterDeck);
+        if (effect && effect.onTick) {
+            effect.onTick(lightMasterDeck);
+        }
     };
 
     this.onLightBeat = function(value, group) {
-        var effect = LightPatterns[currentLightPattern];
-        if (effect && effect.onBeat) effect.onBeat(script.deckFromGroup(group), value);
+        var deck = script.deckFromGroup(group);
+        // Only process the beat if it belongs to the Master Deck
+        if (value > 0 && deck === lightMasterDeck) {
+            var effect = LightPatterns[currentLightPattern];
+            if (effect && effect.onBeat) {
+                effect.onBeat(deck, value);
+            }
+        }
     };
 
     this.moveVertical = function(channel, control, value, status, group) {

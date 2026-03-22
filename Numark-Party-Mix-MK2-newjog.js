@@ -534,13 +534,14 @@ var NumarkPartyMix = function() {
             }
         }
 
-        midi.sendSysexMsg([0xF0, 0x00, 0x20, 0x7F, 0x03, 0x01, 0xF7], 7);
+
+
         midi.sendShortMsg(0xBF, 0x21, 16); 
         engine.connectControl('[Channel1]', 'track_loaded', 'NumarkPartyMix.onTrackLoaded');
         engine.connectControl('[Channel2]', 'track_loaded', 'NumarkPartyMix.onTrackLoaded');
 
         flashTimer = engine.beginTimer(200, flashLoop, false);
-        midi.sendSysexMsg([0xF0, 0x00, 0x20, 0x7F, 0x05, 0xF7], 6);
+        //midi.sendSysexMsg([0xF0, 0x00, 0x20, 0x7F, 0x05, 0xF7], 6);
 
         engine.connectControl('[Channel1]', 'beat_active', 'NumarkPartyMix.onLightBeat');
         engine.connectControl('[Channel2]', 'beat_active', 'NumarkPartyMix.onLightBeat');
@@ -548,6 +549,20 @@ var NumarkPartyMix = function() {
         engine.connectControl('[Channel1]', 'play', 'NumarkPartyMix.updateLightMaster');
         engine.connectControl('[Channel2]', 'play', 'NumarkPartyMix.updateLightMaster');
         //this.lightTimer = engine.beginTimer(30, function() { NumarkPartyMix.onLightTick(); });
+
+        // 1. Ponemos la controladora en modo Serato (ID 7F) y Comando 03
+        midi.sendSysexMsg([0xF0, 0x00, 0x20, 0x7F, 0x03, 0xF7], 6);
+
+        // 2. LOS CÓDIGOS "SECRETOS" DE SERATO (Capturados de tu Wireshark)
+        // Estos comandos suelen configurar la respuesta de los LEDs y Jogs
+        midi.sendSysexMsg([0xF0, 0x00, 0x20, 0x7F, 0x11, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05, 0xF7], 12);
+        midi.sendSysexMsg([0xF0, 0x00, 0x20, 0x7F, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05, 0xF7], 12);
+
+        // 3. Activamos el Heartbeat constante (Comando 05) cada 250ms con ID de Serato
+        this.heartbeatTimer = engine.beginTimer(250, function() {
+            midi.sendSysexMsg([0xF0, 0x00, 0x20, 0x7F, 0x05, 0xF7], 6);
+        });
+
     }; 
 
     var longPressTimers = {};
@@ -691,6 +706,9 @@ var NumarkPartyMix = function() {
 
 
     this.shutdown = function() {
+        if (this.heartbeatTimer) {
+            engine.stopTimer(this.heartbeatTimer);
+        }
         midi.sendShortMsg(0x94, PAD_MODE_CONTROL_BYTE.CUE, ON);
         midi.sendShortMsg(0x95, PAD_MODE_CONTROL_BYTE.CUE, ON);
         this.killLights();

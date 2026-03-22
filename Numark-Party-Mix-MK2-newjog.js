@@ -611,7 +611,7 @@ var NumarkPartyMix = function() {
         var padNum = PAD_NUM_CONTROL_BYTE[control];
         var padDefinition = PAD_MAPPINGS['DECK' + deckNum][padNum][modeName];
         if (padDefinition) padDefinition.handle(value ? 1 : 0);
-        if (value === 0) engine.beginTimer(20, function() { NumarkPartyMix.repaintPads(deckNum); }, true);
+        //if (value === 0) engine.beginTimer(20, function() { NumarkPartyMix.repaintPads(deckNum); }, true);
     };
 
     this.exitScratchMode = function(deckNum) {

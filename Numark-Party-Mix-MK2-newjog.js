@@ -672,9 +672,23 @@ var NumarkPartyMix = function() {
         var shortPressAction = function() {
             var currentWidget = engine.getValue("[Library]", "focused_widget");
             
-            // Prioridad: Si estamos en tracks (3), saltamos a Sidebar (2).
-            // Si estamos en cualquier otra cosa, vamos a Tracks (3).
-            var nextWidget = (currentWidget === 3) ? 2 : 3;
+            /* 
+               Valores de focused_widget:
+               1: Search Bar
+               2: Tree View (Sidebar)
+               3: Tracks Table
+            */
+            var nextWidget;
+            if (currentWidget === 2) {
+                // Si estoy en el Sidebar, voy a la Lista de temas
+                nextWidget = 3;
+            } else if (currentWidget === 3) {
+                // Si estoy en la Lista de temas, voy al Buscador
+                nextWidget = 1;
+            } else {
+                // Si estoy en el Buscador (o cualquier otro sitio), vuelvo al Sidebar
+                nextWidget = 2;
+            }
             
             engine.setValue("[Library]", "focused_widget", nextWidget);
         };
@@ -692,8 +706,12 @@ var NumarkPartyMix = function() {
                 var isMaximized = engine.getValue("[Skin]", "show_maximized_library");
                 engine.setValue("[Skin]", "show_maximized_library", !isMaximized);
             }
+            else if (currentWidget === 1) {
+                // Si estamos en el Buscador: Limpiar la búsqueda con el click largo
+                engine.setValue("[Library]", "clear_search", 1);
+            }
             else {
-                // Por defecto en otros casos (ej. buscador), usar acción nativa
+                // Por defecto en otros casos, usar acción nativa
                 engine.setValue("[Library]", "GoToItem", 1);
             }
         };
@@ -762,6 +780,7 @@ var NumarkPartyMix = function() {
     };
 
     this.onTrackLoaded = function(value, group) {
+        
         if (value === 1) {
             var deckNum = script.deckFromGroup(group);
 
@@ -777,6 +796,7 @@ var NumarkPartyMix = function() {
             engine.setValue(group, 'beatloop_size', 4);
             // ------------------------------------
 
+            
             // Lógica original del script NewJog
             isManualBraking[deckNum] = false; 
             hotcuesDownCount[deckNum] = 0;
@@ -789,6 +809,7 @@ var NumarkPartyMix = function() {
             deckPadMode['DECK' + deckNum] = 'CUE'; 
             NumarkPartyMix.setPadMode(null, null, 1, (deckNum === 1 ? 0x94 : 0x95), group);
         }
+        
     };
 
 

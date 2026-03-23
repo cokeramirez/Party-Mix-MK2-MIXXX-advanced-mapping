@@ -1,6 +1,8 @@
 # Numark Party Mix MK2 - Mixxx Mapping (New Jog Version)
 
-MIDI mapping for the **Numark Party Mix MK2**. This version focuses on improved jog wheel response and extra pad functions.
+MIDI mapping for the **Numark Party Mix MK2**. This version focuses on improved jog wheel response, extra pad functions and lightshows.
+
+> **Note:** This mapping was developed using AI tools.
 
 ## 🛠 Installation
 1.  Download `Numark-Party-Mix-MK2-newjog.js` and `.midi.xml`.
@@ -56,11 +58,12 @@ Functions change when holding the **PAD MODE** button.
 
 ## 📂 Library Navigation
 The **Browse Knob** has two ways to interact:
-*   **Scroll:** Move through the list.
-*   **Short Press:** Switch focus between the sidebar (folders) and the track list.
+*   **Scroll:** Move through the list. It moves faster depending on how quick you turn the knob.
+*   **Short Press:** Switch focus between the Sidebar (folders), the Track List, and the Search Bar.
 *   **Long Press (0.5s):**
     *   If in the sidebar: Open/Close folders.
     *   If in the track list: Zoom in/out the library view (Maximize).
+    *   If in search bar: Clear current search text.
 
 ---
 

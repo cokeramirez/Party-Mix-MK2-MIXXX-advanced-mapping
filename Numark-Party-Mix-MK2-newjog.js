@@ -57,6 +57,7 @@ var NumarkPartyMix = function() {
     this.lightTimer = 0;
     var isSoftwareLightMode = false; // True only when hardware sends Value 1
 
+    var lastLibraryMoveTime = 0;
     
     // LIGHTSHOWS
     
@@ -894,10 +895,25 @@ var NumarkPartyMix = function() {
     };
 
     this.moveVertical = function(channel, control, value, status, group) {
-    // El encoder envía 1 para derecha (bajar) y 127 para izquierda (subir)
-    var val = (value === 0x01) ? 1 : -1;
-    engine.setValue("[Library]", "MoveVertical", val);
-};
+        var now = Date.now();
+        var delta = now - lastLibraryMoveTime;
+        lastLibraryMoveTime = now;
+
+        // Dirección básica: 1 para abajo, -1 para arriba
+        var val = (value === 0x01) ? 1 : -1;
+
+        // Solo aplicamos aceleración si estamos en la lista de temas (widget 3)
+        var currentWidget = engine.getValue("[Library]", "focused_widget");
+        if (currentWidget === 3) {
+            var multiplier = 1;
+            if (delta < 10) multiplier = 10;      // Giro muy rápido
+            else if (delta < 20) multiplier = 3; // Giro medio
+            
+            val = val * multiplier;
+        }
+
+        engine.setValue("[Library]", "MoveVertical", val);
+    };
 };
 
 NumarkPartyMix = new NumarkPartyMix();

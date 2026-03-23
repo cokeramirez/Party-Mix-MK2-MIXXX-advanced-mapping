@@ -63,6 +63,36 @@ var NumarkPartyMix = function() {
     
     var LightPatterns = [
         {
+            name: "Linear Beat",
+            beatCounter: 0,
+            onBeat: function(deck, value) {
+                if (value > 0) {
+                    this.beatCounter = (this.beatCounter + 1) % 4;
+                }
+            },
+            onTick: function(deck) {
+                var pos = NumarkPartyMix.getBeatPos(deck);
+                var brightness = Math.floor(127 * (1 - pos)); // Aqui hacemos que vaya de 127 a 0 por cada beat
+
+                var r = 0, g = 0, b = 0;
+
+                if (this.beatCounter === 0) {
+                    // Beat 1: Las 3 luces a la vez
+                    r = brightness; g = brightness; b = brightness;
+                } else if (this.beatCounter === 1) {
+                    // Beat 2: Luz azul
+                    b = brightness;
+                } else if (this.beatCounter === 2) {
+                    // Beat 3: Luz verde
+                    g = brightness;
+                } else if (this.beatCounter === 3) {
+                    // Beat 4: Luz roja
+                    r = brightness;
+                }
+                
+                NumarkPartyMix.setPartyLights(r, g, b);
+            }
+        },{
             name: "Fade",
             beatCounter: 0,
             onBeat: function(deck, value) {

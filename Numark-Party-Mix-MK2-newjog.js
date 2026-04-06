@@ -14,7 +14,7 @@ var NumarkPartyMix = function() {
     var LIBRARY_LONGPRESS_DELAY = 500;
 
 
-    var RESOLUTION = 310; 
+    var RESOLUTION = 310;  
     var RECORD_SPEED = 33 + (1 / 3);
     var ALPHA = 1.0 / 8; 
     var BETA = ALPHA / 32;
@@ -426,8 +426,18 @@ var NumarkPartyMix = function() {
 
     var padDefBeatjump = function(deck, amount) {
         this.group = '[Channel' + deck + ']';
-        var direction = (amount > 0) ? '_forward' : '_backward';
-        this.actionControl = 'beatjump_' + Math.abs(amount) + direction;
+        
+        // Verificamos si mandamos un número o un texto
+        if (typeof amount === 'number') {
+            // Comportamiento clásico: salto fijo (ej: beatjump_4_forward)
+            var direction = (amount > 0) ? '_forward' : '_backward';
+            this.actionControl = 'beatjump_' + Math.abs(amount) + direction;
+        } else {
+            // Comportamiento dinámico: usa el valor del software (ej: beatjump_forward)
+            // Aquí 'amount' debe ser exactamente "forward" o "backward"
+            this.actionControl = 'beatjump_' + amount;
+        }
+        
         this.bindingControl = this.actionControl;
         this.toggle = false;
     };
@@ -504,8 +514,8 @@ var NumarkPartyMix = function() {
             PAD4: { CUE: new padDefCue(1, 4), LOOP: new padDefLoop(1, 'double'), SAMPLER: new padDefSimpleSampler(4), EFFECT: new padDefMultiParam(1, 'up') },
             PAD5: { CUE: new padDefCueClear(1, 1), LOOP: new padDefBeatjump(1, -1), SAMPLER: new padDefSimpleSampler(5), EFFECT: new padDefConfigToggle('[Channel1]', 'quantize') },
             PAD6: { CUE: new padDefCueClear(1, 2), LOOP: new padDefBeatjump(1, 1),  SAMPLER: new padDefSimpleSampler(6), EFFECT: new padDefTempoRange(1) },
-            PAD7: { CUE: new padDefCueClear(1, 3), LOOP: new padDefBeatjump(1, -4), SAMPLER: new padDefSimpleSampler(7), EFFECT: new padDefScratchToggle(1) }, 
-            PAD8: { CUE: new padDefCueClear(1, 4), LOOP: new padDefBeatjump(1, 4),  SAMPLER: new padDefSamplerPanic(),   EFFECT: new padDefLightCycle() }
+            PAD7: { CUE: new padDefCueClear(1, 3), LOOP: new padDefBeatjump(1, "backward"), SAMPLER: new padDefSimpleSampler(7), EFFECT: new padDefScratchToggle(1) }, 
+            PAD8: { CUE: new padDefCueClear(1, 4), LOOP: new padDefBeatjump(1, "forward"),  SAMPLER: new padDefSamplerPanic(),   EFFECT: new padDefLightCycle() }
         },
         DECK2: {
             PAD1: { CUE: new padDefCue(2, 1), LOOP: new padDefLoopToggle(2), SAMPLER: new padDefSimpleSampler(1), EFFECT: new padDefEffectToggle(2, 1) },
@@ -514,8 +524,8 @@ var NumarkPartyMix = function() {
             PAD4: { CUE: new padDefCue(2, 4), LOOP: new padDefLoop(2, 'double'), SAMPLER: new padDefSimpleSampler(4), EFFECT: new padDefMultiParam(2, 'up') },
             PAD5: { CUE: new padDefCueClear(2, 1), LOOP: new padDefBeatjump(2, -1), SAMPLER: new padDefSimpleSampler(5), EFFECT: new padDefConfigToggle('[Channel2]', 'quantize') },
             PAD6: { CUE: new padDefCueClear(2, 2), LOOP: new padDefBeatjump(2, 1),  SAMPLER: new padDefSimpleSampler(6), EFFECT: new padDefTempoRange(2) },
-            PAD7: { CUE: new padDefCueClear(2, 3), LOOP: new padDefBeatjump(2, -4), SAMPLER: new padDefSimpleSampler(7), EFFECT: new padDefScratchToggle(2) }, 
-            PAD8: { CUE: new padDefCueClear(2, 4), LOOP: new padDefBeatjump(2, 4),  SAMPLER: new padDefSamplerPanic(),   EFFECT: new padDefLightCycle() }
+            PAD7: { CUE: new padDefCueClear(2, 3), LOOP: new padDefBeatjump(2, "backward"), SAMPLER: new padDefSimpleSampler(7), EFFECT: new padDefScratchToggle(2) }, 
+            PAD8: { CUE: new padDefCueClear(2, 4), LOOP: new padDefBeatjump(2, "forward"),  SAMPLER: new padDefSamplerPanic(),   EFFECT: new padDefLightCycle() }
         }
     };
 

@@ -72,22 +72,26 @@ var NumarkPartyMix = function() {
             },
             onTick: function(deck) {
                 var pos = NumarkPartyMix.getBeatPos(deck);
-                var brightness = Math.floor(127 * (1 - pos)); // Aqui hacemos que vaya de 127 a 0 por cada beat
+                var brightness = Math.floor(127 * (1 - pos)); 
 
                 var r = 0, g = 0, b = 0;
 
                 if (this.beatCounter === 0) {
-                    // Beat 1: Las 3 luces a la vez
+                    // Beat 1: Siempre blanco (las 3 luces) para marcar el inicio del compás
                     r = brightness; g = brightness; b = brightness;
-                } else if (this.beatCounter === 1) {
-                    // Beat 2: Luz azul
-                    b = brightness;
-                } else if (this.beatCounter === 2) {
-                    // Beat 3: Luz verde
-                    g = brightness;
-                } else if (this.beatCounter === 3) {
-                    // Beat 4: Luz roja
-                    r = brightness;
+                } else {
+                    // Lógica invertida según el Deck
+                    if (deck === 1) {
+                        // DECK 1: Azul -> Verde -> Rojo
+                        if (this.beatCounter === 1) b = brightness;
+                        else if (this.beatCounter === 2) g = brightness;
+                        else if (this.beatCounter === 3) r = brightness;
+                    } else {
+                        // DECK 2: Rojo -> Verde -> Azul (Invertido)
+                        if (this.beatCounter === 1) r = brightness;
+                        else if (this.beatCounter === 2) g = brightness;
+                        else if (this.beatCounter === 3) b = brightness;
+                    }
                 }
                 
                 NumarkPartyMix.setPartyLights(r, g, b);

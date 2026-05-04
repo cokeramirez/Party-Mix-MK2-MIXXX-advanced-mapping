@@ -514,8 +514,8 @@ var NumarkPartyMix = function() {
         DECK1: {
             PAD1: { CUE: new padDefCue(1, 1), LOOP: new padDefLoopToggle(1), SAMPLER: new padDefSimpleSampler(1), EFFECT: new padDefEffectToggle(1, 1) },
             PAD2: { CUE: new padDefCue(1, 2), LOOP: new padDefLoopRoll(1),   SAMPLER: new padDefSimpleSampler(2), EFFECT: new padDefEffectToggle(1, 2) },
-            PAD3: { CUE: new padDefCue(1, 3), LOOP: new padDefLoop(1, 'halve'), SAMPLER: new padDefSimpleSampler(3), EFFECT: new padDefMultiParam(1, 'down') },
-            PAD4: { CUE: new padDefCue(1, 4), LOOP: new padDefLoop(1, 'double'), SAMPLER: new padDefSimpleSampler(4), EFFECT: new padDefMultiParam(1, 'up') },
+            PAD3: { CUE: new padDefCue(1, 3), LOOP: new padDefLoop(1, 'halve'), SAMPLER: new padDefSimpleSampler(3), EFFECT: new padDefEffectToggle(1, 3) },
+            PAD4: { CUE: new padDefCue(1, 4), LOOP: new padDefLoop(1, 'double'), SAMPLER: new padDefSimpleSampler(4), EFFECT: new padDefLightCycle() },
             PAD5: { CUE: new padDefCueClear(1, 1), LOOP: new padDefBeatjump(1, -1), SAMPLER: new padDefSimpleSampler(5), EFFECT: new padDefConfigToggle('[Channel1]', 'quantize') },
             PAD6: { CUE: new padDefCueClear(1, 2), LOOP: new padDefBeatjump(1, 1),  SAMPLER: new padDefSimpleSampler(6), EFFECT: new padDefTempoRange(1) },
             PAD7: { CUE: new padDefCueClear(1, 3), LOOP: new padDefBeatjump(1, "backward"), SAMPLER: new padDefSimpleSampler(7), EFFECT: new padDefScratchToggle(1) }, 
@@ -524,8 +524,8 @@ var NumarkPartyMix = function() {
         DECK2: {
             PAD1: { CUE: new padDefCue(2, 1), LOOP: new padDefLoopToggle(2), SAMPLER: new padDefSimpleSampler(1), EFFECT: new padDefEffectToggle(2, 1) },
             PAD2: { CUE: new padDefCue(2, 2), LOOP: new padDefLoopRoll(2),   SAMPLER: new padDefSimpleSampler(2), EFFECT: new padDefEffectToggle(2, 2) },
-            PAD3: { CUE: new padDefCue(2, 3), LOOP: new padDefLoop(2, 'halve'), SAMPLER: new padDefSimpleSampler(3), EFFECT: new padDefMultiParam(2, 'down') },
-            PAD4: { CUE: new padDefCue(2, 4), LOOP: new padDefLoop(2, 'double'), SAMPLER: new padDefSimpleSampler(4), EFFECT: new padDefMultiParam(2, 'up') },
+            PAD3: { CUE: new padDefCue(2, 3), LOOP: new padDefLoop(2, 'halve'), SAMPLER: new padDefSimpleSampler(3), EFFECT: new padDefEffectToggle(2, 3) },
+            PAD4: { CUE: new padDefCue(2, 4), LOOP: new padDefLoop(2, 'double'), SAMPLER: new padDefSimpleSampler(4), EFFECT: new padDefLightCycle() },
             PAD5: { CUE: new padDefCueClear(2, 1), LOOP: new padDefBeatjump(2, -1), SAMPLER: new padDefSimpleSampler(5), EFFECT: new padDefConfigToggle('[Channel2]', 'quantize') },
             PAD6: { CUE: new padDefCueClear(2, 2), LOOP: new padDefBeatjump(2, 1),  SAMPLER: new padDefSimpleSampler(6), EFFECT: new padDefTempoRange(2) },
             PAD7: { CUE: new padDefCueClear(2, 3), LOOP: new padDefBeatjump(2, "backward"), SAMPLER: new padDefSimpleSampler(7), EFFECT: new padDefScratchToggle(2) }, 
@@ -645,6 +645,13 @@ var NumarkPartyMix = function() {
         var modeName = (control === null) ? deckPadMode['DECK' + deckNum] : PAD_MODE_CONTROL_BYTE[control];
         if (modeName) {
             deckPadMode['DECK' + deckNum] = modeName;
+            
+            if (modeName === 'CUE') {
+                for (var i = 1; i <= 3; i++) {
+                    engine.setValue('[EffectRack1_EffectUnit' + deckNum + '_Effect' + i + ']', 'meta', 0);
+                }
+            }
+
             midi.sendShortMsg((deckNum === 1 ? 0x94 : 0x95), PAD_MODE_CONTROL_BYTE[modeName], 0x7F);
             NumarkPartyMix.repaintPads(deckNum);
         }
@@ -672,6 +679,7 @@ var NumarkPartyMix = function() {
 
     this.scratch = function(channel, control, value, status, group) {
         var deckNum = script.deckFromGroup(group);
+        if (deckPadMode['DECK' + deckNum] === 'EFFECT') return;
         if (!isScratchEnabled[deckNum]) return;
         if (value > 0) {
             isDeckTouched[deckNum] = true;
@@ -690,6 +698,15 @@ var NumarkPartyMix = function() {
     this.wheelTurn = function(channel, control, value, status, group) {
         var deckNum = script.deckFromGroup(group);
         var newValue = (value < 64) ? value : value - 128;
+
+        if (deckPadMode['DECK' + deckNum] === 'EFFECT') {
+            var action = (newValue > 0) ? 'meta_up_small' : 'meta_down_small';
+            for (var i = 1; i <= 3; i++) {
+                engine.setValue('[EffectRack1_EffectUnit' + deckNum + '_Effect' + i + ']', action, 1);
+            }
+            return;
+        }
+
         var now = Date.now();
         var delta = now - lastMovementTime[deckNum];
         lastMovementTime[deckNum] = now;
@@ -825,24 +842,18 @@ var NumarkPartyMix = function() {
     };
 
     this.onTrackLoaded = function(value, group) {
-        
         if (value === 1) {
             var deckNum = script.deckFromGroup(group);
 
-            // --- FUNCIONALIDADES RESTAURADAS ---
-            // 1. Reset de Audio: Apaga los 2 efectos del deck y centra la perilla Meta
-            for (var i = 1; i <= 2; i++) {
+            deckPadMode['DECK' + deckNum] = 'CUE'; 
+
+            /* for (var i = 1; i <= 3; i++) {
                 var effectGroup = '[EffectRack1_EffectUnit' + deckNum + '_Effect' + i + ']';
                 engine.setValue(effectGroup, 'enabled', 0);
                 engine.setValue(effectGroup, 'meta', 0.5);
-            }
+            } */ //no voy a deshabilitar los efectos, solo los pondre en cero al elegir el modo hot cue
 
-            // 2. Reset de Loop: Devuelve el tamaño del loop a 4 beats por defecto
             engine.setValue(group, 'beatloop_size', 4);
-            // ------------------------------------
-
-            
-            // Lógica original del script NewJog
             isManualBraking[deckNum] = false; 
             hotcuesDownCount[deckNum] = 0;
             
@@ -850,12 +861,10 @@ var NumarkPartyMix = function() {
                 engine.scratchDisable(deckNum);
             }
 
-            // Forzar modo CUE en los pads al cargar
-            deckPadMode['DECK' + deckNum] = 'CUE'; 
             NumarkPartyMix.setPadMode(null, null, 1, (deckNum === 1 ? 0x94 : 0x95), group);
         }
-        
     };
+
 
 
     this.handlePfl = function(channel, control, value, status, group) {
@@ -895,8 +904,11 @@ var NumarkPartyMix = function() {
                     else if (logicPadNum === 3) midiVal = isScratchEnabled[deck] ? 0x7F : 0x00;
                     else midiVal = 0x01;
                 } else {
-                    if (logicPadNum <= 2) midiVal = engine.getValue('[EffectRack1_EffectUnit' + deck + '_Effect' + logicPadNum + ']', 'enabled') ? 0x7F : 0x00;
-                    else midiVal = 0x01;
+                    if (logicPadNum <= 3) {
+                        midiVal = engine.getValue('[EffectRack1_EffectUnit' + deck + '_Effect' + logicPadNum + ']', 'enabled') ? 0x7F : 0x00;
+                    } else {
+                        midiVal = 0x00;
+                    }
                 }
             }
             midi.sendShortMsg(status, physicalPad, midiVal);

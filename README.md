@@ -1,4 +1,4 @@
-# Numark Party Mix MK2 - Mixxx Mapping (New Jog Version)
+# Numark Party Mix MK2 - Mixxx Mapping (Jog FX branch)
 
 MIDI mapping for the **Numark Party Mix MK2**. This version focuses on improved jog wheel response, extra pad functions and lightshows.
 
@@ -37,13 +37,15 @@ Functions change when holding the **PAD MODE** button.
 *   **PAD MODE + Pads:** Trigger Samplers 5-7. **Pad 8 stops all samplers.**
 
 ### 4. Effect Mode
-*   **Pads 1-2:** Toggle FX 1 and FX 2.
-*   **Pads 3-4:** Move Meta Knob down/up.
+In this mode the JOG becomes an fx intensity "knob", move it to change the FX parameter.
+
+*   **Pads 1-2-3:** Toggle FX 1, 2 and 3.
+*   **Pad 4:** Change the lightshow.
 *   **PAD MODE + Pads:**
     *   Pad 5: Toggle Quantize.
     *   Pad 6: Change Pitch Range (8%, 16%, 50%).
     *   Pad 7: Enable/Disable Scratch (Jog touch).
-    *   **Pad 8: Change Light Mode.**
+    *   **Pad 8: Change the lightshow.**
 
 ---
 

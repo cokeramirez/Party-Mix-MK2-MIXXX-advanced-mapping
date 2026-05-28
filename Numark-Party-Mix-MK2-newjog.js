@@ -58,6 +58,25 @@ var NumarkPartyMix = function() {
     var isSoftwareLightMode = false; // True only when hardware sends Value 1
 
     var lastLibraryMoveTime = 0;
+
+    // --- CONFIGURACIÓN DE STEMS VIRTUALES ---
+    // Índices oficiales de Mixxx: 1 (Vocals), 2 (Drums), 3 (Bass), 4 (Melody/Other)
+    // Asigna cada índice a una perilla física virtual: 'high', 'mid', 'low', 'none'
+    // 'none' significa que ese stem no se asocia a ninguna perilla (se mantiene al centro/completo)
+    var STEM_MAPPING = {
+        1: 'low', // Vocals asignado a la perilla HI
+        2: 'none',  // Drums asignado a la perilla LO
+        3: 'none', // Bass sin perilla física asignada (se simula en el centro)
+        4: 'high'  // Instrumental/Melody sin perilla física asignada (se simula en el centro)
+    };
+
+    // Almacén de valores físicos actuales para evitar saltos bruscos
+    var knobValues = {
+        1: { 'high': 0.5, 'mid': 0.5, 'low': 0.5 },
+        2: { 'high': 0.5, 'mid': 0.5, 'low': 0.5 }
+    };
+
+
     
     // LIGHTSHOWS
     
@@ -533,6 +552,66 @@ var NumarkPartyMix = function() {
         }
     };
 
+    // Funciones matemáticas auxiliares para stems
+    var cut = function(x) {
+        if (x <= 0.5) return 2.0 * x;
+        return 1.0;
+    };
+
+    var iso = function(x) {
+        if (x <= 0.5) return 1.0;
+        return 2.0 * (1.0 - x);
+    };
+
+    var getKnobValue = function(deck, stemIndex) {
+        var physicalKnob = STEM_MAPPING[stemIndex];
+        if (physicalKnob === 'none' || !physicalKnob) {
+            return 0.5; // Si no hay perilla física asignada, simula que está en el centro
+        }
+        return knobValues[deck][physicalKnob];
+    };
+
+    // Mapea la perilla física (0.0..0.5..1.0) al rango real de EQ de Mixxx (0.0..1.0..4.0)
+    var getEqParameterValue = function(normalizedValue) {
+        if (normalizedValue <= 0.5) {
+            return normalizedValue * 2.0; // Mapea de Kill (0.0) a Flat (1.0)
+        } else {
+            return 1.0 + (normalizedValue - 0.5) * 6.0; // Mapea de Flat (1.0) a Boost (4.0)
+        }
+    };
+
+    var calculateStemVolume = function(deck, stemIndex) {
+        // Obtener la posición actual de las 4 perillas virtuales
+        var k1 = getKnobValue(deck, 1);
+        var k2 = getKnobValue(deck, 2);
+        var k3 = getKnobValue(deck, 3);
+        var k4 = getKnobValue(deck, 4);
+
+        // Identificar la perilla física más a la derecha (máximo aislamiento)
+        var kmax = Math.max(k1, k2, k3, k4);
+        var ki = getKnobValue(deck, stemIndex);
+
+        if (kmax <= 0.5) {
+            // LADO IZQUIERDO PURO (Corte clásico):
+            return 2.0 * ki;
+        } else {
+            // LADO DERECHO ACTIVO (Aislamiento proporcional continuo):
+            // B define la línea base de volumen para los elementos no aislados.
+            // Va bajando suavemente de 1.0 (en kmax = 0.5) hasta 0.0 (en kmax = 1.0).
+            var B = 2.0 * (1.0 - kmax); 
+
+            if (ki > 0.5) {
+                // Interpolación lineal continua que inicia en la línea base B (en ki = 0.5)
+                // y termina en 1.0 (cuando ki alcanza a kmax).
+                var ratio = (ki - 0.5) / (kmax - 0.5);
+                return B + (1.0 - B) * ratio;
+            } else {
+                // Los elementos a la izquierda de la mitad se atenúan proporcionalmente hacia B.
+                return (2.0 * ki) * B;
+            }
+        }
+    };
+
     var PAD_MODE_CONTROL_BYTE = lookup({ CUE: 0x00, LOOP: 0x0E, SAMPLER: 0x0B, EFFECT: 0x0F });
     var PAD_NUM_CONTROL_BYTE = lookup({ PAD1: 0x14, PAD2: 0x15, PAD3: 0x16, PAD4: 0x17, PAD5: 0x1C, PAD6: 0x1D, PAD7: 0x1E, PAD8: 0x1F });
     var DECK_PAD_CHANNEL = lookup({ DECK1: 4, DECK2: 5 });
@@ -638,6 +717,57 @@ var NumarkPartyMix = function() {
         var isPlaying = engine.getValue(group, "play");
         midi.sendShortMsg(0x90 + channel, control, (value > 0 || isPlaying) ? 0x7F : 0x01);
     };
+
+    this.handleEqHighKnob = function(channel, control, value, status, group) {
+        var deck = script.deckFromGroup(group);
+        NumarkPartyMix.processKnobInput(deck, 'high', value);
+    };
+
+    this.handleEqLowKnob = function(channel, control, value, status, group) {
+        var deck = script.deckFromGroup(group);
+        NumarkPartyMix.processKnobInput(deck, 'low', value);
+    };
+
+    this.processKnobInput = function(deck, knobName, rawValue) {
+        // Corrección del centro físico MIDI (64 -> 0.5, 127 -> 1.0)
+        var normalizedValue = 0.5;
+        if (rawValue <= 64) {
+            normalizedValue = (rawValue / 64.0) * 0.5;
+        } else {
+            normalizedValue = 0.5 + ((rawValue - 64.0) / 63.0) * 0.5;
+        }
+
+        knobValues[deck][knobName] = normalizedValue;
+
+        // Comprobación dinámica de stems
+        var hasStems = (engine.getValue('[Channel' + deck + ']', 'stem_count') > 0);
+
+        if (hasStems) {
+            // Aplicar la lógica matemática a los 4 stems, pero solo si el valor cambia
+            for (var i = 1; i <= 4; i++) {
+                var vol = calculateStemVolume(deck, i);
+                var groupName = '[Channel' + deck + '_Stem' + i + ']';
+                var currentVol = engine.getValue(groupName, 'volume');
+                
+                if (Math.abs(currentVol - vol) > 0.001) {
+                    engine.setValue(groupName, 'volume', vol);
+                }
+            }
+        } else {
+            // Comportamiento normal de ecualización en Mixxx
+            var eqGroup = '[EqualizerRack1_[Channel' + deck + ']_Effect1]';
+            var eqParam = (knobName === 'high') ? 'parameter3' : 'parameter1';
+            
+            // Convertimos la posición física al rango real de Mixxx (0.0 a 4.0)
+            var eqValue = getEqParameterValue(normalizedValue);
+            var currentEq = engine.getValue(eqGroup, eqParam);
+
+            if (Math.abs(currentEq - eqValue) > 0.001) {
+                engine.setValue(eqGroup, eqParam, eqValue);
+            }
+        }
+    };
+
 	
     this.setPadMode = function(channel, control, value, status, group) {
         if (value === 0 && control !== null) return; 
@@ -841,29 +971,52 @@ var NumarkPartyMix = function() {
         }
     };
 
+    
     this.onTrackLoaded = function(value, group) {
         if (value === 1) {
             var deckNum = script.deckFromGroup(group);
 
             deckPadMode['DECK' + deckNum] = 'CUE'; 
 
-            /* for (var i = 1; i <= 3; i++) {
-                var effectGroup = '[EffectRack1_EffectUnit' + deckNum + '_Effect' + i + ']';
-                engine.setValue(effectGroup, 'enabled', 0);
-                engine.setValue(effectGroup, 'meta', 0.5);
-            } */ //no voy a deshabilitar los efectos, solo los pondre en cero al elegir el modo hot cue
+            // Restablecer el volumen de todos los stems a 1.0
+            for (var s = 1; s <= 4; s++) {
+                engine.setValue('[Channel' + deckNum + '_Stem' + s + ']', 'volume', 1.0);
+            }
+
+            var hasStems = (engine.getValue(group, 'stem_count') > 0);
+            if (hasStems) {
+                // SI TIENE STEMS: Reseteamos la ecualización a FLAT (1.0) para que no interfiera 
+                // ya que los knobs ahora controlarán Stems.
+                engine.setValue('[EqualizerRack1_[Channel' + deckNum + ']_Effect1]', 'parameter3', 1.0);
+                engine.setValue('[EqualizerRack1_[Channel' + deckNum + ']_Effect1]', 'parameter1', 1.0);
+
+                // Aplicar volúmenes iniciales según la posición física de las perillas
+                for (var i = 1; i <= 4; i++) {
+                    var vol = calculateStemVolume(deckNum, i);
+                    engine.setValue('[Channel' + deckNum + '_Stem' + i + ']', 'volume', vol);
+                }
+            } else {
+                // SI ES NORMAL: Sincronizamos la EQ visual en pantalla con las perillas físicas
+                var eqHighVal = getEqParameterValue(knobValues[deckNum]['high']);
+                var eqLowVal = getEqParameterValue(knobValues[deckNum]['low']);
+                engine.setValue('[EqualizerRack1_[Channel' + deckNum + ']_Effect1]', 'parameter3', eqHighVal);
+                engine.setValue('[EqualizerRack1_[Channel' + deckNum + ']_Effect1]', 'parameter1', eqLowVal);
+            }
 
             engine.setValue(group, 'beatloop_size', 4);
             isManualBraking[deckNum] = false; 
-            hotcuesDownCount[deckNum] = 0;
             
+            hotcuesDownCount[deckNum] = 0;
+            /*
             if (engine.isScratching(deckNum)) {
                 engine.scratchDisable(deckNum);
-            }
+            }*/
 
             NumarkPartyMix.setPadMode(null, null, 1, (deckNum === 1 ? 0x94 : 0x95), group);
         }
     };
+
+
 
 
 

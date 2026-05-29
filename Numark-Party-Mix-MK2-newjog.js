@@ -1140,6 +1140,22 @@ var NumarkPartyMix = function() {
 
         engine.setValue("[Library]", "MoveVertical", val);
     };
+
+    this.loadTrack = function(channel, control, value, status, group) {
+        if (value === 0) return; // Ignorar el evento al soltar el botón (solo actuar al presionar)
+
+        // Comprobamos si el plato correspondiente está sonando actualmente
+        var isPlaying = engine.getValue(group, "play");
+        
+        if (isPlaying > 0) {
+            // Si el plato estaba sonando, carga y reproduce automáticamente
+            engine.setValue(group, "LoadSelectedTrackAndPlay", 1);
+        } else {
+            // Si estaba detenido, hace una carga normal sin alterar el estado de pausa
+            engine.setValue(group, "LoadSelectedTrack", 1);
+        }
+    };
+
 };
 
 NumarkPartyMix = new NumarkPartyMix();

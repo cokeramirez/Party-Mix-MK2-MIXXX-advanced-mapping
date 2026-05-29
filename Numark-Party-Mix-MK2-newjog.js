@@ -13,6 +13,12 @@ var NumarkPartyMix = function() {
 
     var LIBRARY_LONGPRESS_DELAY = 500;
 
+    // --- CONFIGURACIÓN DE ORDENACIÓN DE BIBLIOTECA (LONG PRESS BROWSE) ---
+    // Puedes modificar esta lista agregando, quitando o alterando el orden de las columnas:
+    //  15: BPM, 20: Key (Tono), 8: Grouping, 1: Artista, 2: Título, 13: Duración
+    var SORT_CRITERIA = [15, 20, 30, 31]; 
+    var currentSortIndex = 0;
+
 
     var RESOLUTION = 310;  
     var RECORD_SPEED = 33 + (1 / 3);
@@ -64,10 +70,10 @@ var NumarkPartyMix = function() {
     // Asigna cada índice a una perilla física virtual: 'high', 'mid', 'low', 'none'
     // 'none' significa que ese stem no se asocia a ninguna perilla (se mantiene al centro/completo)
     var STEM_MAPPING = {
-        1: 'low', // Vocals asignado a la perilla HI
-        2: 'none',  // Drums asignado a la perilla LO
-        3: 'none', // Bass sin perilla física asignada (se simula en el centro)
-        4: 'high'  // Instrumental/Melody sin perilla física asignada (se simula en el centro)
+        1: 'low', // Drums asignado a la perilla LO
+        2: 'low',  // Bass asignado a la perilla LO
+        3: 'none', // Instrumental/Melody sin perilla física asignada (se simula en el centro)
+        4: 'high'  // Vocals asignado a la perilla HI
     };
 
     // Almacén de valores físicos actuales para evitar saltos bruscos
@@ -858,6 +864,7 @@ var NumarkPartyMix = function() {
         }
     };
 
+    
     this.toggleView = function(channel, control, value, status, group) {
         
         // ACCIÓN 1: Cambio de panel (Click corto al soltar)
@@ -874,6 +881,9 @@ var NumarkPartyMix = function() {
             if (currentWidget === 2) {
                 // Si estoy en el Sidebar, voy a la Lista de temas
                 nextWidget = 3;
+                
+                // Reiniciamos el contador cada vez que pasamos del Sidebar a la lista de temas
+                currentSortIndex = 0;
             } else if (currentWidget === 3) {
                 // Si estoy en la Lista de temas, voy al Buscador
                 nextWidget = 1;
@@ -894,9 +904,16 @@ var NumarkPartyMix = function() {
                 engine.setValue("[Library]", "GoToItem", 1);
             } 
             else if (currentWidget === 3) {
-                // Si estamos en la Lista de temas: Maximizar/Restaurar biblioteca
-                var isMaximized = engine.getValue("[Skin]", "show_maximized_library");
-                engine.setValue("[Skin]", "show_maximized_library", !isMaximized);
+                // Ordenamos secuencialmente usando la lista configurable
+                if (SORT_CRITERIA.length > 0) {
+                    var columnToSort = SORT_CRITERIA[currentSortIndex];
+                    
+                    // Asignamos la columna. Mixxx ordenará automáticamente en modo creciente (ascendente)
+                    engine.setValue("[Library]", "sort_column_toggle", columnToSort);
+                    
+                    // Avanzamos al siguiente elemento de la lista para la próxima pulsación
+                    currentSortIndex = (currentSortIndex + 1) % SORT_CRITERIA.length;
+                }
             }
             else if (currentWidget === 1) {
                 // Si estamos en el Buscador: Limpiar la búsqueda con el click largo

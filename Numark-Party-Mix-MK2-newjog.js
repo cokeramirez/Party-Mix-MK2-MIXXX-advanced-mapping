@@ -70,10 +70,10 @@ var NumarkPartyMix = function() {
     // Asigna cada índice a una perilla física virtual: 'high', 'mid', 'low', 'none'
     // 'none' significa que ese stem no se asocia a ninguna perilla (se mantiene al centro/completo)
     var STEM_MAPPING = {
-        1: 'low', // Drums asignado a la perilla LO
-        2: 'low',  // Bass asignado a la perilla LO
-        3: 'none', // Instrumental/Melody sin perilla física asignada (se simula en el centro)
-        4: 'high'  // Vocals asignado a la perilla HI
+        1: 'low', // Drums 
+        2: 'none',  // Bass none
+        3: 'none', // Instrumental/Melody 
+        4: 'high'  // Vocals 
     };
 
     // Almacén de valores físicos actuales para evitar saltos bruscos
@@ -322,7 +322,12 @@ var NumarkPartyMix = function() {
         flashVal = (flashVal === DIM) ? ON : DIM;
         if (deckPadMode['DECK1'] === 'LOOP' && engine.getValue('[Channel1]', 'loop_enabled')) NumarkPartyMix.repaintPads(1);
         if (deckPadMode['DECK2'] === 'LOOP' && engine.getValue('[Channel2]', 'loop_enabled')) NumarkPartyMix.repaintPads(2);
+
+        // Fuerza el refresco de los pads en modo SAMPLER para generar el efecto de parpadeo
+        if (deckPadMode['DECK1'] === 'SAMPLER') NumarkPartyMix.repaintPads(1);
+        if (deckPadMode['DECK2'] === 'SAMPLER') NumarkPartyMix.repaintPads(2);
     };
+
 
 
     var padCallbackMappings = {};
@@ -398,7 +403,25 @@ var NumarkPartyMix = function() {
         this.bindingControl = 'play'; 
         this.handle = function(isPressed) {
             if (isPressed && engine.getValue(this.group, 'track_loaded')) {
-                engine.setValue(this.group, 'cue_gotoandplay', 1);
+                var isLoopMode = engine.getValue(this.group, 'repeat');
+                var isPlaying = engine.getValue(this.group, 'play');
+
+                if (isLoopMode > 0) {
+                    if (isPlaying > 0) {
+                        // COMPORTAMIENTO TOGGLE: Si ya está reproduciéndose en loop, se detiene
+                        engine.setValue(this.group, 'stop', 1);
+                    } else {
+                        // Si está detenido, se inicia sincronizado y cuantizado
+                        engine.setValue(this.group, 'quantize', 1);
+                        engine.setValue(this.group, 'sync_enabled', 1);
+                        engine.setValue(this.group, 'cue_gotoandplay', 1);
+                    }
+                } else {
+                    // COMPORTAMIENTO ONE-SHOT: Disparo clásico (siempre reinicia al pulsar)
+                    engine.setValue(this.group, 'quantize', 0);
+                    engine.setValue(this.group, 'sync_enabled', 0);
+                    engine.setValue(this.group, 'cue_gotoandplay', 1);
+                }
             }
         };
         this.getCallbackKeyMappings = function() {
@@ -1052,21 +1075,34 @@ var NumarkPartyMix = function() {
             if (mode === 'CUE') midiVal = engine.getValue(group, 'hotcue_' + logicPadNum + '_enabled') ? 0x7F : 0x00;
             else if (mode === 'LOOP') midiVal = (logicPadNum === 1) ? (engine.getValue(group, 'loop_enabled') ? flashVal : 0x00) : 0x01;
             else if (mode === 'SAMPLER') {
-                // Si mantenemos "Pad Mode", mostramos la segunda capa (Samplers 5-8)
                 if (NumarkPartyMix.isPadModeHeld) {
-                    if(logicPadNum <= 3){
-                        
+                    if (logicPadNum <= 3) {
                         var sg = '[Sampler' + (logicPadNum + 4) + ']';
-                        midiVal = engine.getValue(sg, 'play') ? 0x7F : (engine.getValue(sg, 'track_loaded') ? 0x01 : 0x00);
+                        var isLoaded = engine.getValue(sg, 'track_loaded');
+                        var isPlaying = engine.getValue(sg, 'play');
+                        var isLooping = engine.getValue(sg, 'repeat');
+                        
+                        if (isPlaying) {
+                            // Parpadea si es un loop activo; luz fija si es un disparo directo
+                            midiVal = isLooping ? flashVal : 0x7F;
+                        } else {
+                            midiVal = isLoaded ? 0x01 : 0x00;
+                        }
+                    } else {
+                        midiVal = 0x7F; // Botón de pánico (Pad 4) en capa Shift
                     }
-                    else {
-                        midiVal = 0x7F;
-                    }
-                    
                 } else {
-                    // Capa normal: Samplers 1-4
                     var sg = '[Sampler' + logicPadNum + ']';
-                    midiVal = engine.getValue(sg, 'play') ? 0x7F : (engine.getValue(sg, 'track_loaded') ? 0x01 : 0x00);
+                    var isLoaded = engine.getValue(sg, 'track_loaded');
+                    var isPlaying = engine.getValue(sg, 'play');
+                    var isLooping = engine.getValue(sg, 'repeat');
+                    
+                    if (isPlaying) {
+                        // Parpadea si es un loop activo; luz fija si es un disparo directo
+                        midiVal = isLooping ? flashVal : 0x7F;
+                    } else {
+                        midiVal = isLoaded ? 0x01 : 0x00;
+                    }
                 }
             } else if (mode === 'EFFECT') {
                 if (NumarkPartyMix.isPadModeHeld) {

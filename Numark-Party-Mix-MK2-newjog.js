@@ -82,6 +82,16 @@ var NumarkPartyMix = function() {
         2: { 'high': 0.5, 'mid': 0.5, 'low': 0.5 }
     };
 
+    // --- CONFIGURACIÓN DE AUTO-FX EN STEMS ---
+    // true: Al bajar el volumen de un stem, se aplica automáticamente su Quick Effect.
+    // false: Comportamiento estándar de volumen únicamente.
+    var ENABLE_STEM_AUTO_FX = true; 
+
+    // Dirección del Quick Effect (en Mixxx el valor neutro/apagado es 0.5):
+    //  0.5 -> El efecto se mueve hacia el máximo (1.0) al quitar volumen (ej. filtro High-Pass)
+    // -0.5 -> El efecto se mueve hacia el mínimo (0.0) al quitar volumen (ej. filtro Low-Pass)
+    var STEM_FX_DIRECTION = -0.5;
+
 
     
     // LIGHTSHOWS
@@ -641,6 +651,26 @@ var NumarkPartyMix = function() {
         }
     };
 
+    // Función auxiliar para actualizar volumen y efecto de un stem simultáneamente
+    var updateStemVolumeAndFx = function(deck, stemIndex, vol) {
+        var stemGroup = '[Channel' + deck + '_Stem' + stemIndex + ']';
+        engine.setValue(stemGroup, 'volume', vol);
+
+        if (ENABLE_STEM_AUTO_FX) {
+            // El Quick Effect en Mixxx tiene su punto neutro/dry en 0.5.
+            // Si el volumen está al 1.0 (100%), el efecto se fuerza a 0.5 (desactivado).
+            // Si el volumen baja a 0.0 (0%), el efecto escala proporcionalmente hacia el valor máximo o mínimo.
+            var fxVal = 0.5 + (1.0 - vol) * STEM_FX_DIRECTION;
+            
+            var fxGroup = '[QuickEffectRack1_[Channel' + deck + '_Stem' + stemIndex + ']]';
+            engine.setValue(fxGroup, 'super1', fxVal);
+        } else {
+            // Si la opción está desactivada, nos aseguramos de que el efecto se mantenga en neutro (0.5)
+            var fxGroup = '[QuickEffectRack1_[Channel' + deck + '_Stem' + stemIndex + ']]';
+            engine.setValue(fxGroup, 'super1', 0.5);
+        }
+    };
+
     var PAD_MODE_CONTROL_BYTE = lookup({ CUE: 0x00, LOOP: 0x0E, SAMPLER: 0x0B, EFFECT: 0x0F });
     var PAD_NUM_CONTROL_BYTE = lookup({ PAD1: 0x14, PAD2: 0x15, PAD3: 0x16, PAD4: 0x17, PAD5: 0x1C, PAD6: 0x1D, PAD7: 0x1E, PAD8: 0x1F });
     var DECK_PAD_CHANNEL = lookup({ DECK1: 4, DECK2: 5 });
@@ -779,7 +809,7 @@ var NumarkPartyMix = function() {
                 var currentVol = engine.getValue(groupName, 'volume');
                 
                 if (Math.abs(currentVol - vol) > 0.001) {
-                    engine.setValue(groupName, 'volume', vol);
+                    updateStemVolumeAndFx(deck, i, vol); // <- AHORA LLAMA A LA NUEVA FUNCIÓN
                 }
             }
         } else {
@@ -1033,7 +1063,7 @@ var NumarkPartyMix = function() {
                 // Aplicar volúmenes iniciales según la posición física de las perillas
                 for (var i = 1; i <= 4; i++) {
                     var vol = calculateStemVolume(deckNum, i);
-                    engine.setValue('[Channel' + deckNum + '_Stem' + i + ']', 'volume', vol);
+                    updateStemVolumeAndFx(deckNum, i, vol); // <- AHORA LLAMA A LA NUEVA FUNCIÓN
                 }
             } else {
                 // SI ES NORMAL: Sincronizamos la EQ visual en pantalla con las perillas físicas
